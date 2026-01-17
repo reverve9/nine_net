@@ -7,4 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   closeChat: (roomId) => ipcRenderer.send('close-chat', roomId),
   closeWindow: () => ipcRenderer.send('close-window'),
   minimizeWindow: () => ipcRenderer.send('minimize-window'),
+  // 인증 관련
+  onLogout: () => ipcRenderer.send('user-logout'),
+  onLogin: () => ipcRenderer.send('user-login'),
 });

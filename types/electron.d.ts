@@ -9,6 +9,8 @@ declare global {
       closeChat: (roomId: string) => void
       closeWindow: () => void
       minimizeWindow: () => void
+      onLogout: () => void
+      onLogin: () => void
     }
   }
 }

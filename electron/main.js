@@ -131,6 +131,32 @@ function toggleMessengerWindow() {
   }
 }
 
+// 모든 창에 로그아웃 브로드캐스트
+function broadcastLogout() {
+  // 메신저 창 닫기
+  if (messengerWindow) {
+    messengerWindow.close();
+    messengerWindow = null;
+  }
+  
+  // 모든 채팅창 닫기
+  chatWindows.forEach((win) => {
+    win.close();
+  });
+  chatWindows.clear();
+}
+
+// 모든 창에 로그인 상태 새로고침
+function broadcastAuthChange() {
+  if (messengerWindow) {
+    messengerWindow.webContents.reload();
+  }
+  
+  chatWindows.forEach((win) => {
+    win.webContents.reload();
+  });
+}
+
 function createTray() {
   const trayIconPath = path.join(__dirname, '../public/tray-iconTemplate.png');
   
@@ -148,6 +174,7 @@ function createTray() {
   tray.on('click', toggleMessengerWindow);
 }
 
+// IPC 핸들러
 ipcMain.on('toggle-messenger', () => {
   toggleMessengerWindow();
 });
@@ -170,6 +197,16 @@ ipcMain.on('close-window', (event) => {
 ipcMain.on('minimize-window', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win) win.minimize();
+});
+
+// 로그아웃 이벤트 - 모든 메신저/채팅창 닫기
+ipcMain.on('user-logout', () => {
+  broadcastLogout();
+});
+
+// 로그인 이벤트 - 메신저/채팅창 새로고침
+ipcMain.on('user-login', () => {
+  broadcastAuthChange();
 });
 
 autoUpdater.on('update-available', () => {

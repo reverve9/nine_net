@@ -34,9 +34,19 @@ export default function Dashboard({ user }: DashboardProps) {
     }
 
     fetchProfile()
+    
+    // 로그인 시 메신저 창 새로고침
+    if (window.electronAPI?.onLogin) {
+      window.electronAPI.onLogin()
+    }
   }, [user.id])
 
   const handleLogout = async () => {
+    // Electron: 메신저/채팅창 모두 닫기
+    if (window.electronAPI?.onLogout) {
+      window.electronAPI.onLogout()
+    }
+    
     await supabase.auth.signOut()
   }
 
