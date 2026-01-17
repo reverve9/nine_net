@@ -27,6 +27,16 @@ interface Member {
   email: string
 }
 
+interface BoardPost {
+  id: string
+  title: string
+  content: string
+  author_id: string
+  room_id: string
+  created_at: string
+  author?: { name: string }
+}
+
 export default function ChatWindow() {
   const params = useParams()
   const roomId = params.roomId as string
@@ -41,10 +51,15 @@ export default function ChatWindow() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [showMembersModal, setShowMembersModal] = useState(false)
+  const [showBoardModal, setShowBoardModal] = useState(false)
+  const [showNewPostModal, setShowNewPostModal] = useState(false)
   const [allMembers, setAllMembers] = useState<Member[]>([])
   const [roomMembers, setRoomMembers] = useState<Member[]>([])
   const [showFileModal, setShowFileModal] = useState(false)
   const [filePath, setFilePath] = useState('')
+  const [boardPosts, setBoardPosts] = useState<BoardPost[]>([])
+  const [newPostTitle, setNewPostTitle] = useState('')
+  const [newPostContent, setNewPostContent] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -52,7 +67,16 @@ export default function ChatWindow() {
     checkAuth()
     setIsElectron(!!window.electronAPI?.isElectron)
   }, [])
-  useEffect(() => { if (user && roomId) { fetchRoom(); fetchMessages(); fetchMembers(); subscribeToMessages() } }, [user, roomId])
+  useEffect(() => { 
+    if (user && roomId) { 
+      fetchRoom()
+      fetchMessages()
+      fetchMembers()
+      fetchBoardPosts()
+      const unsub = subscribeToMessages()
+      return unsub
+    }
+  }, [user, roomId])
   useEffect(() => { scrollToBottom() }, [messages])
 
   const checkAuth = async () => {
@@ -91,6 +115,15 @@ export default function ChatWindow() {
     }
   }
 
+  const fetchBoardPosts = async () => {
+    const { data } = await supabase
+      .from('board_posts')
+      .select('*, author:profiles!author_id(name)')
+      .eq('room_id', roomId)
+      .order('created_at', { ascending: false })
+    if (data) setBoardPosts(data)
+  }
+
   const subscribeToMessages = () => {
     const subscription = supabase
       .channel(`chat-room:${roomId}`)
@@ -105,7 +138,7 @@ export default function ChatWindow() {
         setMessages((prev) => [...prev, newMsg])
       })
       .subscribe()
-    return () => subscription.unsubscribe()
+    return () => { subscription.unsubscribe() }
   }
 
   const scrollToBottom = () => {
@@ -115,13 +148,19 @@ export default function ChatWindow() {
   const handleSend = async () => {
     if (!newMessage.trim() || !roomId || !user) return
     
-    await supabase.from('messages').insert({
+    const { error } = await supabase.from('messages').insert({
       content: newMessage.trim(),
       content_type: 'text',
       sender_id: user.id,
       room_id: roomId,
     })
-    setNewMessage('')
+    
+    if (error) {
+      console.error('메시지 전송 오류:', error)
+      alert('메시지 전송에 실패했습니다.')
+    } else {
+      setNewMessage('')
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -153,6 +192,28 @@ export default function ChatWindow() {
     if (member) setRoomMembers(prev => [...prev, member])
   }
 
+  const handleCreatePost = async () => {
+    if (!newPostTitle.trim() || !newPostContent.trim()) return
+    
+    await supabase.from('board_posts').insert({
+      title: newPostTitle.trim(),
+      content: newPostContent.trim(),
+      author_id: user.id,
+      room_id: roomId,
+    })
+    
+    setNewPostTitle('')
+    setNewPostContent('')
+    setShowNewPostModal(false)
+    fetchBoardPosts()
+  }
+
+  const handleDeletePost = async (postId: string) => {
+    if (!confirm('게시글을 삭제하시겠습니까?')) return
+    await supabase.from('board_posts').delete().eq('id', postId)
+    fetchBoardPosts()
+  }
+
   const handleClose = () => {
     window.electronAPI?.closeWindow?.()
   }
@@ -165,13 +226,12 @@ export default function ChatWindow() {
     alert(`파일 경로: ${path}\n\n이 경로를 파일 탐색기에서 열어주세요.`)
   }
 
-  const openBoard = () => {
-    // 게시판 열기 (추후 구현)
-    alert('게시판 기능 준비중')
-  }
-
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
   }
 
   const filteredMessages = searchQuery 
@@ -204,23 +264,25 @@ export default function ChatWindow() {
 
   return (
     <div className="h-screen flex flex-col bg-[#9bbbd4] overflow-hidden">
-      {/* 헤더 - 드래그 영역 */}
+      {/* 헤더 - 전체가 드래그 영역 */}
       <div 
-        className="bg-[#9bbbd4] px-3 pt-2 pb-3"
+        className="bg-[#9bbbd4] flex-shrink-0"
         style={{ WebkitAppRegion: 'drag' } as any}
       >
         {/* 신호등 버튼 */}
-        {isElectron && (
-          <div className="flex gap-2 mb-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
-            <button onClick={handleClose} className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition" />
-            <button onClick={handleMinimize} className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:brightness-90 transition" />
-            <button className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition" />
-          </div>
-        )}
+        <div className="px-3 pt-2">
+          {isElectron && (
+            <div className="flex gap-2 mb-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
+              <button onClick={handleClose} className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition" />
+              <button onClick={handleMinimize} className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:brightness-90 transition" />
+              <button className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition" />
+            </div>
+          )}
+        </div>
         
         {/* 프로필 + 버튼들 */}
-        <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
-          <div className="w-10 h-10 bg-white/50 rounded-full flex items-center justify-center text-lg">
+        <div className="px-3 pb-3 flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div className="w-10 h-10 bg-white/50 rounded-full flex items-center justify-center text-lg flex-shrink-0">
             {room?.is_self ? '📝' : room?.is_group ? '👥' : '👤'}
           </div>
           
@@ -236,8 +298,7 @@ export default function ChatWindow() {
             )}
           </div>
           
-          <div className="flex items-center gap-1">
-            {/* 검색 버튼 */}
+          <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => setShowSearch(!showSearch)}
               className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-black/10 rounded-full transition"
@@ -247,9 +308,8 @@ export default function ChatWindow() {
               </svg>
             </button>
             
-            {/* 게시판 버튼 */}
             <button
-              onClick={openBoard}
+              onClick={() => setShowBoardModal(true)}
               className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-black/10 rounded-full transition"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -257,7 +317,6 @@ export default function ChatWindow() {
               </svg>
             </button>
             
-            {/* 초대 버튼 */}
             {!room?.is_self && (
               <button
                 onClick={() => setShowInviteModal(true)}
@@ -274,7 +333,7 @@ export default function ChatWindow() {
 
       {/* 검색창 */}
       {showSearch && (
-        <div className="px-3 py-2 bg-[#9bbbd4]">
+        <div className="px-3 py-2 bg-[#9bbbd4] flex-shrink-0">
           <input
             type="text"
             placeholder="대화 내용 검색..."
@@ -341,21 +400,19 @@ export default function ChatWindow() {
       </div>
 
       {/* 입력창 */}
-      <div className="bg-white">
-        {/* 텍스트 입력 - 높이 80px */}
+      <div className="bg-white flex-shrink-0">
         <textarea
           ref={textareaRef}
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={room?.is_self ? '메모 입력...' : '메시지 입력...'}
-          className="w-full px-3 py-2 text-sm bg-white focus:outline-none resize-none"
+          className="w-full px-3 py-2 text-sm bg-white focus:outline-none resize-none border-0"
           style={{ height: '80px' }}
         />
         
-        {/* 하단 툴바 - 높이 35px */}
-        <div className="flex items-center justify-between px-2 h-[35px] border-t border-gray-100">
-          {/* 왼쪽: 첨부 버튼 */}
+        {/* 하단 툴바 */}
+        <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
           <button
             onClick={() => setShowFileModal(true)}
             className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded transition"
@@ -365,7 +422,6 @@ export default function ChatWindow() {
             </svg>
           </button>
           
-          {/* 오른쪽: 전송 버튼 */}
           <button
             onClick={handleSend}
             disabled={!newMessage.trim()}
@@ -381,6 +437,100 @@ export default function ChatWindow() {
           </button>
         </div>
       </div>
+
+      {/* 게시판 모달 */}
+      {showBoardModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowBoardModal(false)}>
+          <div className="bg-white rounded-xl w-80 max-h-[70vh] shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <p className="font-medium text-gray-800">게시판</p>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => setShowNewPostModal(true)}
+                  className="text-blue-500 text-sm hover:underline"
+                >
+                  글쓰기
+                </button>
+                <button onClick={() => setShowBoardModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto">
+              {boardPosts.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-8">게시글이 없습니다</p>
+              ) : (
+                boardPosts.map(post => (
+                  <div key={post.id} className="p-3 border-b hover:bg-gray-50">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">{post.title}</p>
+                        <p className="text-xs text-gray-500 truncate mt-0.5">{post.content}</p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {post.author?.name || '알 수 없음'} · {formatDate(post.created_at)}
+                        </p>
+                      </div>
+                      {post.author_id === user.id && (
+                        <button
+                          onClick={() => handleDeletePost(post.id)}
+                          className="text-gray-400 hover:text-red-500 p-1"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 새 게시글 작성 모달 */}
+      {showNewPostModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowNewPostModal(false)}>
+          <div className="bg-white rounded-xl p-4 w-80 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-medium text-gray-800">새 게시글</p>
+              <button onClick={() => setShowNewPostModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            
+            <input
+              type="text"
+              value={newPostTitle}
+              onChange={(e) => setNewPostTitle(e.target.value)}
+              placeholder="제목"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2"
+            />
+            
+            <textarea
+              value={newPostContent}
+              onChange={(e) => setNewPostContent(e.target.value)}
+              placeholder="내용"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-3 resize-none"
+              rows={4}
+            />
+            
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowNewPostModal(false)}
+                className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleCreatePost}
+                disabled={!newPostTitle.trim() || !newPostContent.trim()}
+                className="flex-1 py-2 text-sm text-white bg-[#5b9bd5] rounded-lg hover:bg-[#4a8bc5] disabled:opacity-50"
+              >
+                작성
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 멤버 목록 모달 */}
       {showMembersModal && (
