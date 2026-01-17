@@ -13,6 +13,7 @@ interface ChatRoom {
   last_message?: string
   last_message_time?: string
   unread_count?: number
+  display_name?: string
 }
 
 interface Member {
@@ -54,6 +55,7 @@ export default function MessengerMain() {
   }
 
   const fetchRooms = async () => {
+    // 1. 나와의 채팅방 확인/생성
     const { data: selfRoom } = await supabase
       .from('chat_rooms')
       .select('*')
@@ -62,18 +64,42 @@ export default function MessengerMain() {
       .single()
 
     if (!selfRoom) {
-      await supabase.from('chat_rooms').insert({ name: '나와의 채팅', is_group: false, is_self: true, created_by: user.id })
+      const { data: newSelfRoom } = await supabase
+        .from('chat_rooms')
+        .insert({ name: '나와의 채팅', is_group: false, is_self: true, created_by: user.id })
+        .select()
+        .single()
+      
+      if (newSelfRoom) {
+        // 나와의 채팅방에 나 추가
+        await supabase.from('room_members').insert({ room_id: newSelfRoom.id, user_id: user.id })
+      }
     }
 
+    // 2. 내가 참여중인 모든 채팅방 가져오기
+    const { data: myMemberships } = await supabase
+      .from('room_members')
+      .select('room_id')
+      .eq('user_id', user.id)
+
+    if (!myMemberships || myMemberships.length === 0) {
+      setRooms([])
+      return
+    }
+
+    const roomIds = myMemberships.map(m => m.room_id)
+
+    // 3. 채팅방 정보 가져오기
     const { data: allRooms } = await supabase
       .from('chat_rooms')
       .select('*')
-      .eq('created_by', user.id)
+      .in('id', roomIds)
       .order('created_at', { ascending: false })
 
     if (allRooms) {
       const roomsWithMessages = await Promise.all(
         allRooms.map(async (room) => {
+          // 최신 메시지
           const { data: lastMsg } = await supabase
             .from('messages')
             .select('content, created_at')
@@ -82,8 +108,33 @@ export default function MessengerMain() {
             .limit(1)
             .single()
 
+          // 1:1 채팅인 경우 상대방 이름 표시
+          let displayName = room.name
+          if (!room.is_group && !room.is_self) {
+            const { data: roomMembers } = await supabase
+              .from('room_members')
+              .select('user_id')
+              .eq('room_id', room.id)
+            
+            if (roomMembers) {
+              const otherUserId = roomMembers.find(m => m.user_id !== user.id)?.user_id
+              if (otherUserId) {
+                const { data: otherUser } = await supabase
+                  .from('profiles')
+                  .select('name, email')
+                  .eq('id', otherUserId)
+                  .single()
+                
+                if (otherUser) {
+                  displayName = otherUser.name || otherUser.email?.split('@')[0] || room.name
+                }
+              }
+            }
+          }
+
           return {
             ...room,
+            display_name: displayName,
             last_message: lastMsg?.content || '',
             last_message_time: lastMsg?.created_at || room.created_at,
             unread_count: 0
@@ -91,6 +142,7 @@ export default function MessengerMain() {
         })
       )
 
+      // 나와의 채팅 맨 위, 나머지는 최신 메시지 순
       const sortedRooms = roomsWithMessages.sort((a, b) => {
         if (a.is_self) return -1
         if (b.is_self) return 1
@@ -107,7 +159,7 @@ export default function MessengerMain() {
   }
 
   const openChatWindow = (room: ChatRoom) => {
-    const roomName = room.is_self ? '나와의 채팅' : room.name
+    const roomName = room.is_self ? '나와의 채팅' : (room.display_name || room.name)
     if (window.electronAPI?.isElectron) {
       window.electronAPI.openChat(room.id, roomName)
     } else {
@@ -116,46 +168,80 @@ export default function MessengerMain() {
   }
 
   const openSelfChat = async () => {
-    const selfRoom = rooms.find(r => r.is_self && r.created_by === user.id)
+    const selfRoom = rooms.find(r => r.is_self)
     if (selfRoom) openChatWindow(selfRoom)
   }
 
   const startDirectChat = async (member: Member) => {
-    const roomName = member.name || member.email?.split('@')[0]
-    
-    const { data: existingRooms } = await supabase
-      .from('chat_rooms')
-      .select('*')
-      .eq('is_group', false)
-      .eq('is_self', false)
-      .eq('created_by', user.id)
-    
-    const existing = existingRooms?.find(r => r.name === roomName)
-    
-    if (existing) {
-      openChatWindow(existing)
-    } else {
-      const { data: newRoom } = await supabase
-        .from('chat_rooms')
-        .insert({ name: roomName, is_group: false, is_self: false, created_by: user.id })
-        .select()
-        .single()
-      if (newRoom) {
-        await fetchRooms()
-        openChatWindow(newRoom)
+    // 1. 이미 존재하는 1:1 채팅방 찾기
+    const { data: myMemberships } = await supabase
+      .from('room_members')
+      .select('room_id')
+      .eq('user_id', user.id)
+
+    if (myMemberships) {
+      for (const membership of myMemberships) {
+        // 해당 방의 정보 확인
+        const { data: room } = await supabase
+          .from('chat_rooms')
+          .select('*')
+          .eq('id', membership.room_id)
+          .eq('is_group', false)
+          .eq('is_self', false)
+          .single()
+
+        if (room) {
+          // 해당 방에 상대방이 있는지 확인
+          const { data: memberInRoom } = await supabase
+            .from('room_members')
+            .select('user_id')
+            .eq('room_id', room.id)
+            .eq('user_id', member.id)
+            .single()
+
+          if (memberInRoom) {
+            // 이미 존재하는 1:1 채팅방
+            openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] })
+            return
+          }
+        }
       }
+    }
+
+    // 2. 새 1:1 채팅방 생성
+    const roomName = `${profile?.name || user.email?.split('@')[0]} & ${member.name || member.email?.split('@')[0]}`
+    
+    const { data: newRoom } = await supabase
+      .from('chat_rooms')
+      .insert({ name: roomName, is_group: false, is_self: false, created_by: user.id })
+      .select()
+      .single()
+
+    if (newRoom) {
+      // 양쪽 다 room_members에 추가
+      await supabase.from('room_members').insert([
+        { room_id: newRoom.id, user_id: user.id },
+        { room_id: newRoom.id, user_id: member.id }
+      ])
+
+      await fetchRooms()
+      openChatWindow({ ...newRoom, display_name: member.name || member.email?.split('@')[0] })
     }
   }
 
   const createGroupChat = async () => {
     const name = prompt('그룹 채팅방 이름:')
     if (!name) return
+    
     const { data: newRoom } = await supabase
       .from('chat_rooms')
       .insert({ name, is_group: true, is_self: false, created_by: user.id })
       .select()
       .single()
+
     if (newRoom) {
+      // 생성자를 room_members에 추가
+      await supabase.from('room_members').insert({ room_id: newRoom.id, user_id: user.id })
       await fetchRooms()
       openChatWindow(newRoom)
     }
@@ -165,8 +251,8 @@ export default function MessengerMain() {
     e.stopPropagation()
     if (!confirm('채팅방을 나가시겠습니까?')) return
     
+    // room_members에서 나 삭제
     await supabase.from('room_members').delete().eq('room_id', roomId).eq('user_id', user.id)
-    await supabase.from('chat_rooms').delete().eq('id', roomId).eq('created_by', user.id)
     
     setRooms(prev => prev.filter(r => r.id !== roomId))
   }
@@ -373,10 +459,14 @@ export default function MessengerMain() {
                       {room.is_self ? '📝' : room.is_group ? '👥' : '👤'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">{room.is_self ? '나와의 채팅' : room.name}</p>
-                      <p className="text-xs text-gray-400 truncate">{room.last_message || (room.is_self ? '메모' : room.is_group ? '그룹' : '1:1')}</p>
+                      <p className="text-sm font-medium text-gray-800 truncate">
+                        {room.is_self ? '나와의 채팅' : (room.display_name || room.name)}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {room.last_message || (room.is_self ? '메모' : room.is_group ? '그룹' : '1:1')}
+                      </p>
                     </div>
-                    {/* 우측 영역 - 모든 아이템 동일한 너비 */}
+                    {/* 우측 영역 */}
                     <div className="w-20 flex items-center justify-end gap-1 flex-shrink-0">
                       <div className="flex flex-col items-end">
                         <span className="text-xs text-gray-400">{formatTime(room.last_message_time || '')}</span>
@@ -386,7 +476,6 @@ export default function MessengerMain() {
                           </span>
                         ) : null}
                       </div>
-                      {/* 나가기 버튼 - 나와의 채팅 제외, 항상 공간 차지 */}
                       <div className="w-6 flex items-center justify-center">
                         {!room.is_self && (
                           <button
