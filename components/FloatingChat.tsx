@@ -16,15 +16,6 @@ interface FloatingChatProps {
   user: any
 }
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      isElectron: boolean
-      toggleMessenger: () => void
-    }
-  }
-}
-
 export default function FloatingChat({ user }: FloatingChatProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
@@ -35,7 +26,6 @@ export default function FloatingChat({ user }: FloatingChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    // Electron 환경 체크
     setIsElectron(!!window.electronAPI?.isElectron)
   }, [])
 
@@ -133,10 +123,8 @@ export default function FloatingChat({ user }: FloatingChatProps) {
 
   const handleButtonClick = () => {
     if (isElectron && window.electronAPI) {
-      // Electron: 독립 창 열기
       window.electronAPI.toggleMessenger()
     } else {
-      // 웹: 플로팅 팝업
       setIsOpen(!isOpen)
     }
   }

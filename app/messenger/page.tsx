@@ -19,15 +19,6 @@ interface Member {
   role?: string
 }
 
-declare global {
-  interface Window {
-    electronAPI?: {
-      isElectron: boolean
-      openChat: (roomId: string, roomName: string) => void
-    }
-  }
-}
-
 type TabType = 'chats' | 'members' | 'settings'
 
 export default function MessengerMain() {
