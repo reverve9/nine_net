@@ -122,10 +122,6 @@ export default function ChatWindow() {
       room_id: roomId,
     })
     setNewMessage('')
-    
-    if (textareaRef.current) {
-      textareaRef.current.style.height = '60px'
-    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -133,13 +129,6 @@ export default function ChatWindow() {
       e.preventDefault()
       handleSend()
     }
-  }
-
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setNewMessage(e.target.value)
-    const textarea = e.target
-    textarea.style.height = '60px'
-    textarea.style.height = Math.min(Math.max(textarea.scrollHeight, 60), 120) + 'px'
   }
 
   const handleSendFile = async () => {
@@ -176,6 +165,11 @@ export default function ChatWindow() {
     alert(`파일 경로: ${path}\n\n이 경로를 파일 탐색기에서 열어주세요.`)
   }
 
+  const openBoard = () => {
+    // 게시판 열기 (추후 구현)
+    alert('게시판 기능 준비중')
+  }
+
   const formatTime = (dateString: string) => {
     return new Date(dateString).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
   }
@@ -209,12 +203,12 @@ export default function ChatWindow() {
   const roomName = room?.is_self ? '나와의 채팅' : room?.name || '채팅'
 
   return (
-    <div 
-      className="h-screen flex flex-col bg-[#9bbbd4] overflow-hidden"
-      style={{ WebkitAppRegion: 'drag' } as any}
-    >
-      {/* 헤더 */}
-      <div className="bg-[#9bbbd4] px-3 pt-2 pb-3">
+    <div className="h-screen flex flex-col bg-[#9bbbd4] overflow-hidden">
+      {/* 헤더 - 드래그 영역 */}
+      <div 
+        className="bg-[#9bbbd4] px-3 pt-2 pb-3"
+        style={{ WebkitAppRegion: 'drag' } as any}
+      >
         {/* 신호등 버튼 */}
         {isElectron && (
           <div className="flex gap-2 mb-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
@@ -237,7 +231,7 @@ export default function ChatWindow() {
                 onClick={() => setShowMembersModal(true)}
                 className="text-xs text-gray-600 hover:underline"
               >
-                {memberCount}명 참여중
+                {memberCount}명
               </button>
             )}
           </div>
@@ -250,6 +244,16 @@ export default function ChatWindow() {
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </button>
+            
+            {/* 게시판 버튼 */}
+            <button
+              onClick={openBoard}
+              className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-black/10 rounded-full transition"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </button>
             
@@ -268,9 +272,9 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* 검색창 (하단에 표시) */}
+      {/* 검색창 */}
       {showSearch && (
-        <div className="px-3 py-2 bg-[#9bbbd4]" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="px-3 py-2 bg-[#9bbbd4]">
           <input
             type="text"
             placeholder="대화 내용 검색..."
@@ -283,10 +287,7 @@ export default function ChatWindow() {
       )}
 
       {/* 메시지 목록 */}
-      <div 
-        className="flex-1 overflow-y-auto p-3 space-y-2"
-        style={{ WebkitAppRegion: 'no-drag' } as any}
-      >
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {filteredMessages.length === 0 ? (
           <p className="text-center text-gray-600 text-xs mt-8">
             {searchQuery ? '검색 결과가 없습니다' : room?.is_self ? '메모를 작성해보세요 ✏️' : '첫 메시지를 보내보세요 👋'}
@@ -339,30 +340,25 @@ export default function ChatWindow() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 입력창 - 카카오톡 스타일 */}
-      <div 
-        className="bg-white"
-        style={{ WebkitAppRegion: 'no-drag' } as any}
-      >
-        {/* 텍스트 입력 */}
-        <div className="p-2">
-          <textarea
-            ref={textareaRef}
-            value={newMessage}
-            onChange={handleTextareaChange}
-            onKeyDown={handleKeyDown}
-            placeholder={room?.is_self ? '메모 입력...' : '메시지 입력...'}
-            className="w-full px-3 py-2 text-sm bg-white rounded-lg focus:outline-none resize-none"
-            style={{ height: '60px', minHeight: '60px', maxHeight: '120px' }}
-          />
-        </div>
+      {/* 입력창 */}
+      <div className="bg-white">
+        {/* 텍스트 입력 - 높이 80px */}
+        <textarea
+          ref={textareaRef}
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={room?.is_self ? '메모 입력...' : '메시지 입력...'}
+          className="w-full px-3 py-2 text-sm bg-white focus:outline-none resize-none"
+          style={{ height: '80px' }}
+        />
         
-        {/* 하단 툴바 */}
-        <div className="flex items-center justify-between px-2 pb-2">
+        {/* 하단 툴바 - 높이 35px */}
+        <div className="flex items-center justify-between px-2 h-[35px] border-t border-gray-100">
           {/* 왼쪽: 첨부 버튼 */}
           <button
             onClick={() => setShowFileModal(true)}
-            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded transition"
+            className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded transition"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -373,13 +369,13 @@ export default function ChatWindow() {
           <button
             onClick={handleSend}
             disabled={!newMessage.trim()}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition ${
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
               newMessage.trim() 
                 ? 'bg-[#5b9bd5] text-white hover:bg-[#4a8bc5]' 
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
           </button>
@@ -391,18 +387,16 @@ export default function ChatWindow() {
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowMembersModal(false)}>
           <div className="bg-white rounded-xl p-4 w-64 max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <p className="font-medium text-gray-800">참여중인 멤버 ({memberCount})</p>
+              <p className="font-medium text-gray-800">참여 멤버 ({memberCount})</p>
               <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             
             <div className="space-y-1 max-h-52 overflow-y-auto">
-              {/* 나 */}
               <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
                 <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm">👤</div>
                 <p className="text-sm text-gray-800">나</p>
               </div>
               
-              {/* 다른 멤버들 */}
               {roomMembers.map(member => (
                 <div key={member.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg">
                   <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm">👤</div>

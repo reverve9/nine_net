@@ -9,6 +9,9 @@ interface ChatRoom {
   is_group: boolean
   is_self?: boolean
   created_at: string
+  last_message?: string
+  last_message_time?: string
+  unread_count?: number
 }
 
 interface Member {
@@ -50,6 +53,7 @@ export default function MessengerMain() {
   }
 
   const fetchRooms = async () => {
+    // 나와의 채팅방 확인/생성
     const { data: selfRoom } = await supabase
       .from('chat_rooms')
       .select('*')
@@ -61,15 +65,57 @@ export default function MessengerMain() {
       await supabase.from('chat_rooms').insert({ name: '나와의 채팅', is_group: false, is_self: true, created_by: user.id })
     }
 
-    const { data: allRooms } = await supabase.from('chat_rooms').select('*').order('created_at', { ascending: false })
+    // 모든 채팅방 가져오기
+    const { data: allRooms } = await supabase
+      .from('chat_rooms')
+      .select('*')
+      .or(`created_by.eq.${user.id},is_group.eq.true`)
+      .order('created_at', { ascending: false })
 
     if (allRooms) {
-      const sortedRooms = allRooms.sort((a, b) => {
+      // 각 채팅방의 최신 메시지 가져오기
+      const roomsWithMessages = await Promise.all(
+        allRooms.map(async (room) => {
+          const { data: lastMsg } = await supabase
+            .from('messages')
+            .select('content, created_at')
+            .eq('room_id', room.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+
+          // 안 읽은 메시지 수 (간단히 구현)
+          const { count } = await supabase
+            .from('messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('room_id', room.id)
+            .neq('sender_id', user.id)
+
+          return {
+            ...room,
+            last_message: lastMsg?.content || '',
+            last_message_time: lastMsg?.created_at || room.created_at,
+            unread_count: 0 // 실제 구현 시 읽음 표시 테이블 필요
+          }
+        })
+      )
+
+      // 나와의 채팅을 맨 위로, 나머지는 최신 메시지 순
+      const sortedRooms = roomsWithMessages.sort((a, b) => {
         if (a.is_self) return -1
         if (b.is_self) return 1
-        return 0
+        return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime()
       })
-      setRooms(sortedRooms)
+
+      // 중복 제거 (나와의 채팅이 여러 개인 경우)
+      const uniqueRooms = sortedRooms.filter((room, index, self) => {
+        if (room.is_self) {
+          return index === self.findIndex(r => r.is_self && r.created_by === user.id)
+        }
+        return true
+      })
+
+      setRooms(uniqueRooms)
     }
   }
 
@@ -127,6 +173,17 @@ export default function MessengerMain() {
     }
   }
 
+  const leaveRoom = async (roomId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!confirm('채팅방을 나가시겠습니까?')) return
+    
+    // room_members에서 삭제
+    await supabase.from('room_members').delete().eq('room_id', roomId).eq('user_id', user.id)
+    
+    // 리스트에서 제거
+    setRooms(prev => prev.filter(r => r.id !== roomId))
+  }
+
   const updateUserStatus = async (status: 'online' | 'away' | 'offline') => {
     await supabase.from('profiles').update({ status }).eq('id', user.id)
     setProfile(prev => prev ? { ...prev, status } : null)
@@ -134,21 +191,31 @@ export default function MessengerMain() {
   }
 
   const handleClose = () => {
-    if (window.electronAPI?.closeWindow) {
-      window.electronAPI.closeWindow()
-    }
+    window.electronAPI?.closeWindow?.()
   }
 
   const handleMinimize = () => {
-    if (window.electronAPI?.minimizeWindow) {
-      window.electronAPI.minimizeWindow()
-    }
+    window.electronAPI?.minimizeWindow?.()
   }
 
   const StatusDot = ({ status, size = 'sm' }: { status: string, size?: 'sm' | 'md' }) => {
     const colors: Record<string, string> = { online: 'bg-green-500', away: 'bg-yellow-500', offline: 'bg-gray-400' }
     const sizeClass = size === 'md' ? 'w-2.5 h-2.5' : 'w-2 h-2'
     return <span className={`inline-block ${sizeClass} rounded-full ${colors[status] || 'bg-gray-400'}`}></span>
+  }
+
+  const formatTime = (dateString: string) => {
+    if (!dateString) return ''
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffHours = diffMs / (1000 * 60 * 60)
+    
+    if (diffHours < 24) {
+      return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+    } else {
+      return date.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
+    }
   }
 
   if (loading) {
@@ -168,12 +235,12 @@ export default function MessengerMain() {
   }
 
   return (
-    <div 
-      className="h-screen flex bg-white overflow-hidden"
-      style={{ WebkitAppRegion: 'drag' } as any}
-    >
-      {/* 사이드바 */}
-      <div className="w-[70px] bg-gray-100 flex flex-col items-center pt-3 pb-4">
+    <div className="h-screen flex bg-white overflow-hidden">
+      {/* 사이드바 - 드래그 영역 */}
+      <div 
+        className="w-[70px] bg-gray-100 flex flex-col items-center pt-3 pb-4"
+        style={{ WebkitAppRegion: 'drag' } as any}
+      >
         {/* 커스텀 신호등 버튼 */}
         {isElectron && (
           <div className="flex gap-2 mb-6" style={{ WebkitAppRegion: 'no-drag' } as any}>
@@ -224,8 +291,8 @@ export default function MessengerMain() {
       </div>
 
       {/* 메인 영역 */}
-      <div className="flex-1 flex flex-col" style={{ WebkitAppRegion: 'no-drag' } as any}>
-        {/* 헤더 - 검색 제거, 텍스트 크게 */}
+      <div className="flex-1 flex flex-col">
+        {/* 헤더 */}
         <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
           <h1 className="text-base font-semibold text-gray-800">
             {activeTab === 'chats' ? '채팅' : activeTab === 'members' ? '멤버' : '설정'}
@@ -264,10 +331,8 @@ export default function MessengerMain() {
                 </div>
               </div>
 
-              {/* 구분선 */}
               <div className="border-t border-gray-100 my-1" />
 
-              {/* 다른 멤버들 */}
               {members.length === 0 ? (
                 <p className="text-center text-gray-400 text-xs py-8">다른 멤버가 없습니다</p>
               ) : (
@@ -303,15 +368,34 @@ export default function MessengerMain() {
                   <div
                     key={room.id}
                     onClick={() => openChatWindow(room)}
-                    className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 cursor-pointer"
+                    className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 cursor-pointer group"
                   >
-                    <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-base">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center text-xl flex-shrink-0">
                       {room.is_self ? '📝' : room.is_group ? '👥' : '👤'}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{room.is_self ? '나와의 채팅' : room.name}</p>
-                      <p className="text-xs text-gray-400">{room.is_self ? '메모' : room.is_group ? '그룹' : '1:1'}</p>
+                      <p className="text-xs text-gray-400 truncate">{room.last_message || (room.is_self ? '메모' : room.is_group ? '그룹' : '1:1')}</p>
                     </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <span className="text-xs text-gray-400">{formatTime(room.last_message_time || '')}</span>
+                      {room.unread_count && room.unread_count > 0 && (
+                        <span className="w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                          {room.unread_count > 99 ? '99+' : room.unread_count}
+                        </span>
+                      )}
+                    </div>
+                    {/* 나가기 버튼 (나와의 채팅 제외) */}
+                    {!room.is_self && (
+                      <button
+                        onClick={(e) => leaveRoom(room.id, e)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 ))
               )}

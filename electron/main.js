@@ -51,16 +51,17 @@ function createMessengerWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
   messengerWindow = new BrowserWindow({
-    width: 300,
-    height: 500,
-    x: width - 320,
+    width: 400,
+    height: 600,
+    minWidth: 400,
+    minHeight: 400,
+    x: width - 420,
     y: 80,
     movable: true,
     resizable: true,
     alwaysOnTop: true,
     frame: false,
     transparent: false,
-    vibrancy: 'sidebar',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -89,9 +90,11 @@ function createChatWindow(roomId, roomName) {
   const offset = chatWindows.size * 30;
 
   const chatWindow = new BrowserWindow({
-    width: 340,
-    height: 480,
-    x: width - 380 - offset,
+    width: 400,
+    height: 550,
+    minWidth: 400,
+    minHeight: 400,
+    x: width - 440 - offset,
     y: 120 + offset,
     movable: true,
     resizable: true,
@@ -159,13 +162,11 @@ ipcMain.on('close-chat', (event, roomId) => {
   }
 });
 
-// 창 닫기 요청
 ipcMain.on('close-window', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win) win.close();
 });
 
-// 창 최소화 요청
 ipcMain.on('minimize-window', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win) win.minimize();
