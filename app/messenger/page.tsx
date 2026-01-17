@@ -23,16 +23,17 @@ type TabType = 'chats' | 'members' | 'settings'
 
 export default function MessengerMain() {
   const [user, setUser] = useState<any>(null)
+  const [profile, setProfile] = useState<Member | null>(null)
   const [rooms, setRooms] = useState<ChatRoom[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<TabType>('chats')
+  const [activeTab, setActiveTab] = useState<TabType>('members')
   const [notificationEnabled, setNotificationEnabled] = useState(true)
-  const [userStatus, setUserStatus] = useState<'online' | 'away' | 'offline'>('online')
   const [searchQuery, setSearchQuery] = useState('')
+  const [showStatusMenu, setShowStatusMenu] = useState(false)
 
   useEffect(() => { checkAuth() }, [])
-  useEffect(() => { if (user) { fetchRooms(); fetchMembers() } }, [user])
+  useEffect(() => { if (user) { fetchProfile(); fetchRooms(); fetchMembers() } }, [user])
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -40,8 +41,16 @@ export default function MessengerMain() {
     setLoading(false)
   }
 
+  const fetchProfile = async () => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+    if (data) setProfile(data)
+  }
+
   const fetchRooms = async () => {
-    // 나와의 채팅방 확인/생성
     const { data: selfRoom } = await supabase
       .from('chat_rooms')
       .select('*')
@@ -80,15 +89,20 @@ export default function MessengerMain() {
     if (window.electronAPI?.isElectron) {
       window.electronAPI.openChat(room.id, roomName)
     } else {
-      // 웹에서는 새 탭으로
       window.open(`/chat/${room.id}`, '_blank')
+    }
+  }
+
+  const openSelfChat = async () => {
+    const selfRoom = rooms.find(r => r.is_self)
+    if (selfRoom) {
+      openChatWindow(selfRoom)
     }
   }
 
   const startDirectChat = async (member: Member) => {
     const roomName = member.name || member.email?.split('@')[0]
     
-    // 기존 1:1 채팅방 찾기
     const { data: existingRooms } = await supabase
       .from('chat_rooms')
       .select('*')
@@ -127,13 +141,19 @@ export default function MessengerMain() {
   }
 
   const updateUserStatus = async (status: 'online' | 'away' | 'offline') => {
-    setUserStatus(status)
     await supabase.from('profiles').update({ status }).eq('id', user.id)
+    setProfile(prev => prev ? { ...prev, status } : null)
+    setShowStatusMenu(false)
   }
 
-  const StatusDot = ({ status }: { status: string }) => {
-    const colors: Record<string, string> = { online: 'bg-green-500', away: 'bg-yellow-500', offline: 'bg-gray-300' }
-    return <span className={`inline-block w-2 h-2 rounded-full ${colors[status] || 'bg-gray-300'}`}></span>
+  const StatusDot = ({ status, size = 'sm' }: { status: string, size?: 'sm' | 'lg' }) => {
+    const colors: Record<string, string> = { 
+      online: 'bg-green-500', 
+      away: 'bg-yellow-500', 
+      offline: 'bg-gray-400' 
+    }
+    const sizeClass = size === 'lg' ? 'w-3 h-3' : 'w-2 h-2'
+    return <span className={`inline-block ${sizeClass} rounded-full ${colors[status] || 'bg-gray-400'}`}></span>
   }
 
   const filteredRooms = rooms.filter(r => 
@@ -161,30 +181,64 @@ export default function MessengerMain() {
   }
 
   return (
-    <div className="h-screen flex bg-white">
-      {/* 아이콘 사이드바 */}
-      <div className="w-14 bg-gray-900 flex flex-col items-center py-4 gap-3">
-        <button
-          onClick={() => setActiveTab('chats')}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition ${
-            activeTab === 'chats' ? 'bg-blue-500 text-white' : 'text-gray-400 hover:bg-gray-800'
-          }`}
-        >
-          💬
-        </button>
+    <div className="h-screen flex bg-gray-100">
+      {/* 사이드바 */}
+      <div className="w-20 bg-gray-50 border-r border-gray-200 flex flex-col items-center py-4">
+        {/* 내 프로필 + 상태 */}
+        <div className="relative mb-6">
+          <div 
+            onClick={() => setShowStatusMenu(!showStatusMenu)}
+            className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center text-xl cursor-pointer hover:bg-blue-200 transition"
+          >
+            👤
+          </div>
+          <div className="absolute -bottom-1 -right-1 p-0.5 bg-white rounded-full">
+            <StatusDot status={profile?.status || 'offline'} size="lg" />
+          </div>
+          
+          {/* 상태 변경 메뉴 */}
+          {showStatusMenu && (
+            <div className="absolute top-14 left-0 bg-white rounded-xl shadow-lg border border-gray-200 py-2 z-50 w-32">
+              {(['online', 'away', 'offline'] as const).map(status => (
+                <button
+                  key={status}
+                  onClick={() => updateUserStatus(status)}
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-gray-50 ${
+                    profile?.status === status ? 'text-blue-600' : 'text-gray-700'
+                  }`}
+                >
+                  <StatusDot status={status} />
+                  {status === 'online' ? '온라인' : status === 'away' ? '자리비움' : '오프라인'}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 탭 아이콘들 */}
         <button
           onClick={() => setActiveTab('members')}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition ${
-            activeTab === 'members' ? 'bg-blue-500 text-white' : 'text-gray-400 hover:bg-gray-800'
+          className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl mb-2 transition ${
+            activeTab === 'members' ? 'bg-gray-200' : 'hover:bg-gray-200'
           }`}
         >
           👥
         </button>
+        <button
+          onClick={() => setActiveTab('chats')}
+          className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl mb-2 transition ${
+            activeTab === 'chats' ? 'bg-gray-200' : 'hover:bg-gray-200'
+          }`}
+        >
+          💬
+        </button>
+        
         <div className="flex-1" />
+        
         <button
           onClick={() => setActiveTab('settings')}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition ${
-            activeTab === 'settings' ? 'bg-blue-500 text-white' : 'text-gray-400 hover:bg-gray-800'
+          className={`w-12 h-12 rounded-xl flex items-center justify-center text-xl transition ${
+            activeTab === 'settings' ? 'bg-gray-200' : 'hover:bg-gray-200'
           }`}
         >
           ⚙️
@@ -192,41 +246,100 @@ export default function MessengerMain() {
       </div>
 
       {/* 메인 영역 */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col bg-white">
         {/* 헤더 */}
         <div 
           className="px-4 py-3 border-b border-gray-200 flex items-center gap-3"
           style={{ WebkitAppRegion: 'drag' } as any}
         >
-          <h1 className="font-semibold text-gray-800">
+          <h1 className="font-semibold text-gray-800 text-lg">
             {activeTab === 'chats' ? '채팅' : activeTab === 'members' ? '멤버' : '설정'}
           </h1>
           {activeTab !== 'settings' && (
-            <input
-              type="text"
-              placeholder="검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 px-3 py-1.5 text-sm bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              style={{ WebkitAppRegion: 'no-drag' } as any}
-            />
-          )}
-          {activeTab === 'chats' && (
-            <button
-              onClick={createGroupChat}
-              className="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-              style={{ WebkitAppRegion: 'no-drag' } as any}
-            >
-              + 그룹
-            </button>
+            <>
+              <input
+                type="text"
+                placeholder="검색"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="flex-1 px-3 py-1.5 text-sm bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                style={{ WebkitAppRegion: 'no-drag' } as any}
+              />
+              {activeTab === 'chats' && (
+                <button
+                  onClick={createGroupChat}
+                  className="w-9 h-9 flex items-center justify-center text-gray-500 hover:bg-gray-100 rounded-lg"
+                  style={{ WebkitAppRegion: 'no-drag' } as any}
+                >
+                  ➕
+                </button>
+              )}
+            </>
           )}
         </div>
 
         {/* 컨텐츠 */}
         <div className="flex-1 overflow-y-auto">
+          {/* 멤버 리스트 */}
+          {activeTab === 'members' && (
+            <div>
+              {/* 나 (맨 위) */}
+              <div
+                onClick={openSelfChat}
+                className="flex items-center gap-3 px-4 py-4 hover:bg-gray-50 cursor-pointer"
+              >
+                <div className="relative">
+                  <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center text-2xl">
+                    👤
+                  </div>
+                  <div className="absolute -bottom-0.5 -right-0.5 p-0.5 bg-white rounded-full">
+                    <StatusDot status={profile?.status || 'offline'} size="lg" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-gray-800">
+                    {profile?.name || user.email?.split('@')[0]}
+                  </p>
+                  <p className="text-sm text-gray-400">{profile?.role || '나'}</p>
+                </div>
+              </div>
+
+              {/* 구분선 */}
+              <div className="border-t border-gray-200 mx-4" />
+
+              {/* 다른 멤버들 */}
+              {filteredMembers.length === 0 ? (
+                <p className="text-center text-gray-400 text-sm py-10">다른 멤버가 없습니다</p>
+              ) : (
+                filteredMembers.map(member => (
+                  <div
+                    key={member.id}
+                    onClick={() => startDirectChat(member)}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer"
+                  >
+                    <div className="relative">
+                      <div className="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center text-xl">
+                        👤
+                      </div>
+                      <div className="absolute -bottom-0.5 -right-0.5 p-0.5 bg-white rounded-full">
+                        <StatusDot status={member.status || 'offline'} />
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-800">
+                        {member.name || member.email?.split('@')[0]}
+                      </p>
+                      <p className="text-sm text-gray-400">{member.role || '팀원'}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
           {/* 채팅방 리스트 */}
           {activeTab === 'chats' && (
-            <div className="divide-y divide-gray-100">
+            <div>
               {filteredRooms.length === 0 ? (
                 <p className="text-center text-gray-400 text-sm py-10">채팅방이 없습니다</p>
               ) : (
@@ -236,11 +349,11 @@ export default function MessengerMain() {
                     onClick={() => openChatWindow(room)}
                     className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer"
                   >
-                    <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center text-xl">
+                    <div className="w-12 h-12 bg-gray-200 rounded-2xl flex items-center justify-center text-xl">
                       {room.is_self ? '📝' : room.is_group ? '👥' : '👤'}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-800 truncate">
+                    <div className="flex-1">
+                      <p className="font-medium text-gray-800">
                         {room.is_self ? '나와의 채팅' : room.name}
                       </p>
                       <p className="text-sm text-gray-400">
@@ -253,62 +366,9 @@ export default function MessengerMain() {
             </div>
           )}
 
-          {/* 멤버 리스트 */}
-          {activeTab === 'members' && (
-            <div className="divide-y divide-gray-100">
-              {filteredMembers.length === 0 ? (
-                <p className="text-center text-gray-400 text-sm py-10">멤버가 없습니다</p>
-              ) : (
-                filteredMembers.map(member => (
-                  <div
-                    key={member.id}
-                    onClick={() => startDirectChat(member)}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer"
-                  >
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-xl">
-                      👤
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-800 truncate flex items-center gap-2">
-                        {member.name || member.email?.split('@')[0]}
-                        <StatusDot status={member.status || 'offline'} />
-                      </p>
-                      <p className="text-sm text-gray-400">{member.role || '팀원'}</p>
-                    </div>
-                    <button className="px-3 py-1 text-xs bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100">
-                      채팅
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
           {/* 설정 */}
           {activeTab === 'settings' && (
             <div className="p-4 space-y-6">
-              {/* 내 상태 */}
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-3">내 상태</p>
-                <div className="bg-gray-50 rounded-xl overflow-hidden">
-                  {(['online', 'away', 'offline'] as const).map((status, i) => (
-                    <button
-                      key={status}
-                      onClick={() => updateUserStatus(status)}
-                      className={`w-full flex items-center gap-3 px-4 py-3 text-sm ${
-                        userStatus === status ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-100'
-                      } ${i > 0 ? 'border-t border-gray-200' : ''}`}
-                    >
-                      <StatusDot status={status} />
-                      <span className="flex-1 text-left">
-                        {status === 'online' ? '온라인' : status === 'away' ? '자리비움' : '오프라인'}
-                      </span>
-                      {userStatus === status && <span className="text-blue-500">✓</span>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* 알림 */}
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase mb-3">알림</p>
