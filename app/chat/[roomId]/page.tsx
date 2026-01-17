@@ -91,6 +91,7 @@ export default function ChatWindow() {
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [showMentionList, setShowMentionList] = useState(false)
   const [mentionFilter, setMentionFilter] = useState('')
+  const [displayName, setDisplayName] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -120,20 +121,16 @@ export default function ChatWindow() {
           async (payload) => {
             const newMsg = payload.new as any
             
-            const { data: sender } = await supabase
-              .from('profiles')
-              .select('name')
-              .eq('id', newMsg.sender_id)
-              .single()
-            
-            const messageWithSender = { ...newMsg, sender } as Message
-            
+            // 중복 방지: 이미 있는 메시지면 무시
             setMessages(prev => {
-              if (prev.some(m => m.id === messageWithSender.id)) {
+              if (prev.some(m => m.id === newMsg.id)) {
                 return prev
               }
-              return [...prev, messageWithSender]
+              return prev // 일단 무시, fetchMessages에서 처리
             })
+            
+            // 새 메시지 가져오기
+            fetchMessages()
             
             // 새 메시지 읽음 처리 (내가 보낸 게 아니면)
             if (newMsg.sender_id !== user.id) {
@@ -180,7 +177,55 @@ export default function ChatWindow() {
 
   const fetchRoom = async () => {
     const { data } = await supabase.from('chat_rooms').select('*').eq('id', roomId).single()
-    if (data) setRoom(data)
+    if (data) {
+      setRoom(data)
+      
+      // 표시 이름 계산
+      if (data.is_self) {
+        setDisplayName('나와의 채팅')
+      } else if (!data.is_group) {
+        // 1:1 채팅 - 상대방 이름만
+        const { data: members } = await supabase
+          .from('room_members')
+          .select('user_id')
+          .eq('room_id', roomId)
+        
+        if (members) {
+          const otherUserId = members.find(m => m.user_id !== user?.id)?.user_id
+          if (otherUserId) {
+            const { data: otherUser } = await supabase
+              .from('profiles')
+              .select('name, email')
+              .eq('id', otherUserId)
+              .single()
+            
+            if (otherUser) {
+              setDisplayName(otherUser.name || otherUser.email?.split('@')[0] || data.name)
+            }
+          }
+        }
+      } else {
+        // 그룹 채팅 - 나 제외한 멤버들
+        const { data: members } = await supabase
+          .from('room_members')
+          .select('user_id')
+          .eq('room_id', roomId)
+        
+        if (members) {
+          const otherUserIds = members.filter(m => m.user_id !== user?.id).map(m => m.user_id)
+          if (otherUserIds.length > 0) {
+            const { data: otherUsers } = await supabase
+              .from('profiles')
+              .select('name, email')
+              .in('id', otherUserIds)
+            
+            if (otherUsers) {
+              setDisplayName(otherUsers.map(u => u.name || u.email?.split('@')[0]).join(', '))
+            }
+          }
+        }
+      }
+    }
   }
 
   const fetchMessages = async () => {
@@ -222,7 +267,6 @@ export default function ChatWindow() {
   const markAllAsRead = async () => {
     if (!user) return
     
-    // 내가 보내지 않은 + 아직 안 읽은 메시지들
     const unreadMessages = messages.filter(msg => {
       if (msg.sender_id === user.id) return false
       const readBy = msg.read_by || []
@@ -246,14 +290,10 @@ export default function ChatWindow() {
     if (msg) {
       const readBy = msg.read_by || []
       if (!readBy.includes(user.id)) {
-        const { error } = await supabase
+        await supabase
           .from('messages')
           .update({ read_by: [...readBy, user.id] })
           .eq('id', messageId)
-        
-        if (error) {
-          console.error('읽음 처리 실패:', error)
-        }
       }
     }
   }
@@ -277,6 +317,7 @@ export default function ChatWindow() {
       messageData.reply_to = replyTo.id
     }
     
+    // 메시지 전송 (실시간 구독에서 처리됨)
     const { error } = await supabase.from('messages').insert(messageData)
     
     if (error) {
@@ -357,8 +398,7 @@ export default function ChatWindow() {
     const { error } = await supabase
       .from('room_members')
       .delete()
-      .eq('room_id', roomId)
-      .eq('user_id', user.id)
+      .match({ room_id: roomId, user_id: user.id })
     
     if (error) {
       console.error('나가기 실패:', error)
@@ -449,7 +489,8 @@ export default function ChatWindow() {
     return name.includes(mentionFilter)
   })
 
-  const memberCount = roomMembers.length
+  // 멤버 수 (나 제외)
+  const memberCount = roomMembers.filter(m => m.id !== user?.id).length
 
   if (loading) {
     return (
@@ -467,7 +508,7 @@ export default function ChatWindow() {
     )
   }
 
-  const roomName = room?.is_self ? '나와의 채팅' : room?.name || '채팅'
+  const roomDisplayName = displayName || room?.name || '채팅'
 
   return (
     <div className="h-screen flex flex-col bg-[#494949] overflow-hidden">
@@ -495,8 +536,8 @@ export default function ChatWindow() {
           </div>
           
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{roomName}</p>
-            {!room?.is_self && (
+            <p className="text-sm font-medium text-white truncate">{roomDisplayName}</p>
+            {!room?.is_self && memberCount > 0 && (
               <button 
                 onClick={() => setShowMembersModal(true)}
                 className="text-xs text-gray-300 hover:text-white"
@@ -619,7 +660,7 @@ export default function ChatWindow() {
                     {isMe && (
                       <div className="flex flex-col items-end justify-end mb-0.5">
                         {unreadCount > 0 && (
-                          <span className="text-xs text-yellow-400">{unreadCount}</span>
+                          <span className="text-xs text-yellow-400 font-medium">{unreadCount}</span>
                         )}
                         <span className="text-xs text-gray-400">{formatTime(msg.created_at)}</span>
                       </div>
@@ -892,16 +933,15 @@ export default function ChatWindow() {
             </div>
             
             <div className="space-y-1 max-h-52 overflow-y-auto">
-              {roomMembers.map(member => (
-                <div key={member.id} className={`flex items-center gap-2 p-2 rounded-lg ${member.id === user.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${member.id === user.id ? 'bg-blue-100' : 'bg-gray-200'}`}>
+              {roomMembers.filter(m => m.id !== user.id).map(member => (
+                <div key={member.id} className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center bg-gray-200">
                     <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                     </svg>
                   </div>
                   <p className="text-sm text-gray-800">
                     {member.name || member.email?.split('@')[0]}
-                    {member.id === user.id && ' (나)'}
                   </p>
                 </div>
               ))}

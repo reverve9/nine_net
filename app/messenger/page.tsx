@@ -63,7 +63,6 @@ export default function MessengerMain() {
       fetchRooms()
       fetchMembers()
       
-      // 실시간 메시지 구독
       const channel = supabase.channel('messenger-updates')
         .on(
           'postgres_changes',
@@ -97,15 +96,14 @@ export default function MessengerMain() {
 
   const fetchRooms = async () => {
     // 나와의 채팅방 확인
-    const { data: existingSelfRoom } = await supabase
+    const { data: existingSelfRooms } = await supabase
       .from('chat_rooms')
       .select('id')
       .eq('is_self', true)
       .eq('created_by', user.id)
-      .single()
 
     // 없으면 생성
-    if (!existingSelfRoom) {
+    if (!existingSelfRooms || existingSelfRooms.length === 0) {
       const { data: newSelfRoom } = await supabase
         .from('chat_rooms')
         .insert({ name: '나와의 채팅', is_group: false, is_self: true, created_by: user.id })
@@ -140,13 +138,14 @@ export default function MessengerMain() {
       const roomsWithMessages = await Promise.all(
         allRooms.map(async (room) => {
           // 최신 메시지
-          const { data: lastMsg } = await supabase
+          const { data: lastMsgs } = await supabase
             .from('messages')
             .select('content, created_at')
             .eq('room_id', room.id)
             .order('created_at', { ascending: false })
             .limit(1)
-            .single()
+          
+          const lastMsg = lastMsgs && lastMsgs.length > 0 ? lastMsgs[0] : null
 
           // 안 읽은 메시지 수 (나와의 채팅은 제외)
           let unreadCount = 0
@@ -171,7 +170,7 @@ export default function MessengerMain() {
           if (room.is_self) {
             displayName = '나와의 채팅'
           } else if (!room.is_group) {
-            // 1:1 채팅 - 상대방 이름
+            // 1:1 채팅 - 상대방 이름만
             const { data: roomMembersList } = await supabase
               .from('room_members')
               .select('user_id')
@@ -191,6 +190,31 @@ export default function MessengerMain() {
                 }
               }
             }
+          } else {
+            // 그룹 채팅 - 나 제외한 멤버들 이름
+            const { data: roomMembersList } = await supabase
+              .from('room_members')
+              .select('user_id')
+              .eq('room_id', room.id)
+            
+            if (roomMembersList) {
+              const otherUserIds = roomMembersList
+                .filter(m => m.user_id !== user.id)
+                .map(m => m.user_id)
+              
+              if (otherUserIds.length > 0) {
+                const { data: otherUsers } = await supabase
+                  .from('profiles')
+                  .select('name, email')
+                  .in('id', otherUserIds)
+                
+                if (otherUsers && otherUsers.length > 0) {
+                  displayName = otherUsers
+                    .map(u => u.name || u.email?.split('@')[0])
+                    .join(', ')
+                }
+              }
+            }
           }
 
           return {
@@ -204,7 +228,7 @@ export default function MessengerMain() {
         })
       )
 
-      // 정렬: 나와의 채팅 항상 최상단 > 고정 > 최신 메시지 순
+      // 정렬
       const sortedRooms = roomsWithMessages.sort((a, b) => {
         if (a.is_self) return -1
         if (b.is_self) return 1
@@ -237,6 +261,7 @@ export default function MessengerMain() {
   }
 
   const startDirectChat = async (member: Member) => {
+    // 기존 1:1 채팅방 찾기
     const { data: myMemberships } = await supabase
       .from('room_members')
       .select('room_id')
@@ -244,23 +269,25 @@ export default function MessengerMain() {
 
     if (myMemberships) {
       for (const membership of myMemberships) {
-        const { data: room } = await supabase
+        // 해당 방이 1:1 채팅인지 확인
+        const { data: rooms } = await supabase
           .from('chat_rooms')
           .select('*')
           .eq('id', membership.room_id)
           .eq('is_group', false)
           .eq('is_self', false)
-          .single()
+        
+        const room = rooms && rooms.length > 0 ? rooms[0] : null
 
         if (room) {
-          const { data: memberInRoom } = await supabase
+          // 상대방이 이 방에 있는지 확인
+          const { data: memberCheck } = await supabase
             .from('room_members')
             .select('user_id')
             .eq('room_id', room.id)
             .eq('user_id', member.id)
-            .single()
 
-          if (memberInRoom) {
+          if (memberCheck && memberCheck.length > 0) {
             openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] })
             return
           }
@@ -268,7 +295,8 @@ export default function MessengerMain() {
       }
     }
 
-    const roomName = `${profile?.name || user.email?.split('@')[0]} & ${member.name || member.email?.split('@')[0]}`
+    // 새 채팅방 생성
+    const roomName = `${member.name || member.email?.split('@')[0]}`
     
     const { data: newRoom } = await supabase
       .from('chat_rooms')
@@ -350,14 +378,12 @@ export default function MessengerMain() {
     const { error } = await supabase
       .from('room_members')
       .delete()
-      .eq('room_id', roomId)
-      .eq('user_id', user.id)
+      .match({ room_id: roomId, user_id: user.id })
     
     if (error) {
       console.error('나가기 실패:', error)
-      alert('채팅방 나가기에 실패했습니다.')
+      alert('채팅방 나가기에 실패했습니다: ' + error.message)
     } else {
-      // 즉시 리스트에서 제거
       setRooms(prev => prev.filter(r => r.id !== roomId))
     }
     
@@ -577,14 +603,14 @@ export default function MessengerMain() {
                         {room.last_message || (room.is_self ? '메모' : room.is_group ? '그룹' : '1:1')}
                       </p>
                     </div>
-                    {/* 우측: 시간 + 안읽은 배지 (나와의 채팅 제외) */}
-                    <div className="flex flex-col items-end flex-shrink-0">
+                    {/* 우측: 시간 + 안읽은 배지 */}
+                    <div className="flex flex-col items-end flex-shrink-0 min-w-[50px]">
                       <span className="text-[10px] text-gray-400">{formatTime(room.last_message_time || '')}</span>
-                      {!room.is_self && room.unread_count && room.unread_count > 0 && (
-                        <span className="mt-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1">
+                      {!room.is_self && room.unread_count && room.unread_count > 0 ? (
+                        <span className="mt-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-medium rounded-full flex items-center justify-center px-1.5">
                           {room.unread_count > 99 ? '99+' : room.unread_count}
                         </span>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 ))
