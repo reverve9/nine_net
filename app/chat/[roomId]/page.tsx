@@ -398,7 +398,7 @@ export default function ChatWindow() {
     const { error } = await supabase
       .from('room_members')
       .delete()
-      .match({ room_id: roomId, user_id: user.id })
+      .eq('room_id', roomId).eq('user_id', user.id)
     
     if (error) {
       console.error('나가기 실패:', error)
