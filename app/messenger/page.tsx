@@ -157,7 +157,7 @@ export default function MessengerMain() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-white rounded-xl">
+      <div className="h-screen flex items-center justify-center bg-white">
         <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
       </div>
     )
@@ -165,55 +165,55 @@ export default function MessengerMain() {
 
   if (!user) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-white rounded-xl p-4">
+      <div className="h-screen flex flex-col items-center justify-center bg-white p-4">
         <p className="text-gray-500 text-xs">메인 앱에서 로그인해주세요</p>
       </div>
     )
   }
 
   return (
-    <div className="h-screen flex bg-white rounded-xl overflow-hidden">
-      {/* 사이드바 */}
+    <div className="h-screen flex bg-white overflow-hidden">
+      {/* 사이드바 - 카카오톡 스타일 */}
       <div 
-        className="w-[52px] bg-gray-100 flex flex-col items-center py-2"
+        className="w-[70px] bg-gray-100 flex flex-col items-center pt-3 pb-4"
         style={{ WebkitAppRegion: 'drag' } as any}
       >
         {/* 커스텀 신호등 버튼 */}
         {isElectron && (
-          <div className="flex gap-1.5 mb-4 mt-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div className="flex gap-2 mb-6" style={{ WebkitAppRegion: 'no-drag' } as any}>
             <button
               onClick={handleClose}
-              className="w-3 h-3 rounded-full bg-[#ff5f57] hover:bg-[#ff3b30] transition"
+              className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition"
             />
             <button
               onClick={handleMinimize}
-              className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:bg-[#ff9500] transition"
+              className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:brightness-90 transition"
             />
             <button
-              className="w-3 h-3 rounded-full bg-[#28c840] hover:bg-[#28a745] transition"
+              className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition"
             />
           </div>
         )}
         
         {/* 탭 아이콘 */}
-        <div className="flex flex-col items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="flex flex-col items-center gap-4 mt-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <button
             onClick={() => setActiveTab('members')}
-            className={`w-10 h-10 flex items-center justify-center transition ${
+            className={`w-7 h-7 flex items-center justify-center transition ${
               activeTab === 'members' ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
             }`}
           >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
             </svg>
           </button>
           <button
             onClick={() => setActiveTab('chats')}
-            className={`w-10 h-10 flex items-center justify-center transition ${
+            className={`w-7 h-7 flex items-center justify-center transition ${
               activeTab === 'chats' ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
             }`}
           >
-            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+            <svg className="w-7 h-7" fill="currentColor" viewBox="0 0 24 24">
               <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
             </svg>
           </button>
@@ -224,12 +224,12 @@ export default function MessengerMain() {
         {/* 설정 */}
         <button
           onClick={() => setActiveTab('settings')}
-          className={`w-10 h-10 flex items-center justify-center transition ${
+          className={`w-7 h-7 flex items-center justify-center transition ${
             activeTab === 'settings' ? 'text-gray-900' : 'text-gray-400 hover:text-gray-600'
           }`}
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
             <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
           </svg>
         </button>
@@ -278,10 +278,10 @@ export default function MessengerMain() {
               {/* 나 */}
               <div
                 onClick={() => setShowProfileModal(true)}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 cursor-pointer"
               >
                 <div className="relative">
-                  <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center text-sm">👤</div>
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-base">👤</div>
                   <div className="absolute -bottom-0.5 -right-0.5 p-0.5 bg-white rounded-full">
                     <StatusDot status={profile?.status || 'offline'} size="md" />
                   </div>
@@ -303,10 +303,10 @@ export default function MessengerMain() {
                   <div
                     key={member.id}
                     onClick={() => startDirectChat(member)}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                    className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 cursor-pointer"
                   >
                     <div className="relative">
-                      <div className="w-9 h-9 bg-gray-200 rounded-full flex items-center justify-center text-sm">👤</div>
+                      <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center text-base">👤</div>
                       <div className="absolute -bottom-0.5 -right-0.5 p-0.5 bg-white rounded-full">
                         <StatusDot status={member.status || 'offline'} />
                       </div>
@@ -331,9 +331,9 @@ export default function MessengerMain() {
                   <div
                     key={room.id}
                     onClick={() => openChatWindow(room)}
-                    className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
+                    className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 cursor-pointer"
                   >
-                    <div className="w-9 h-9 bg-gray-100 rounded-full flex items-center justify-center text-sm">
+                    <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-base">
                       {room.is_self ? '📝' : room.is_group ? '👥' : '👤'}
                     </div>
                     <div className="flex-1 min-w-0">
