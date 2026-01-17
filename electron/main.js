@@ -4,6 +4,7 @@ const path = require('path');
 
 let mainWindow;
 let messengerWindow;
+let chatWindows = new Map(); // 여러 채팅창 관리
 let tray;
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -50,9 +51,9 @@ function createMessengerWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
   messengerWindow = new BrowserWindow({
-    width: 360,
+    width: 320,
     height: 500,
-    x: width - 400,
+    x: width - 340,
     y: 100,
     movable: true,
     resizable: true,
@@ -63,13 +64,53 @@ function createMessengerWindow() {
       preload: path.join(__dirname, 'preload.js'),
     },
     icon: path.join(__dirname, '../public/icon-512.png'),
-    title: '팀 채팅',
+    title: '메신저',
   });
 
-  messengerWindow.loadURL(baseUrl + '/messenger-popup');
+  messengerWindow.loadURL(baseUrl + '/messenger');
 
   messengerWindow.on('closed', () => {
     messengerWindow = null;
+  });
+}
+
+function createChatWindow(roomId, roomName) {
+  // 이미 열린 채팅창이 있으면 포커스
+  if (chatWindows.has(roomId)) {
+    const existingWindow = chatWindows.get(roomId);
+    existingWindow.show();
+    existingWindow.focus();
+    return;
+  }
+
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+  
+  // 창 위치를 약간씩 다르게 (겹치지 않게)
+  const offset = chatWindows.size * 30;
+
+  const chatWindow = new BrowserWindow({
+    width: 360,
+    height: 500,
+    x: width - 400 - offset,
+    y: 150 + offset,
+    movable: true,
+    resizable: true,
+    alwaysOnTop: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js'),
+    },
+    icon: path.join(__dirname, '../public/icon-512.png'),
+    title: roomName || '채팅',
+  });
+
+  chatWindow.loadURL(baseUrl + '/chat/' + roomId);
+
+  chatWindows.set(roomId, chatWindow);
+
+  chatWindow.on('closed', () => {
+    chatWindows.delete(roomId);
   });
 }
 
@@ -102,19 +143,19 @@ function createTray() {
   tray.on('click', toggleMessengerWindow);
 }
 
-// IPC 통신 - 웹에서 메신저 창 제어
-ipcMain.on('open-messenger', () => {
-  createMessengerWindow();
-});
-
-ipcMain.on('close-messenger', () => {
-  if (messengerWindow) {
-    messengerWindow.hide();
-  }
-});
-
+// IPC 통신
 ipcMain.on('toggle-messenger', () => {
   toggleMessengerWindow();
+});
+
+ipcMain.on('open-chat', (event, { roomId, roomName }) => {
+  createChatWindow(roomId, roomName);
+});
+
+ipcMain.on('close-chat', (event, roomId) => {
+  if (chatWindows.has(roomId)) {
+    chatWindows.get(roomId).close();
+  }
 });
 
 autoUpdater.on('update-available', () => {
