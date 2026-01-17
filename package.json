@@ -1,19 +1,26 @@
 {
-  "name": "company-intranet",
-  "version": "0.1.0",
+  "name": "nine-net",
+  "version": "1.0.0",
   "private": true,
+  "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "electron:dev": "electron .",
+    "electron:build": "electron-builder",
+    "electron:build:mac": "electron-builder --mac",
+    "electron:build:win": "electron-builder --win",
+    "electron:build:all": "electron-builder --mac --win"
   },
   "dependencies": {
     "next": "14.1.0",
     "react": "^18",
     "react-dom": "^18",
     "@supabase/supabase-js": "^2.39.3",
-    "@supabase/ssr": "^0.1.0"
+    "@supabase/ssr": "^0.1.0",
+    "electron-updater": "^6.1.7"
   },
   "devDependencies": {
     "typescript": "^5",
@@ -24,6 +31,47 @@
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
     "eslint": "^8",
-    "eslint-config-next": "14.1.0"
+    "eslint-config-next": "14.1.0",
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.company.ninenet",
+    "productName": "Nine Net",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "electron/**/*",
+      "public/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "icon": "public/icon-512.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": ["x64", "arm64"]
+        }
+      ]
+    },
+    "win": {
+      "icon": "public/icon-512.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "reverve9",
+      "repo": "nine_net"
+    }
   }
 }
