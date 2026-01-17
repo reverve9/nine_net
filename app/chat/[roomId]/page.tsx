@@ -78,27 +78,50 @@ export default function ChatWindow() {
       fetchMembers()
       fetchBoardPosts()
       
-      // 실시간 구독
-      const channel = supabase
-        .channel(`chat-${roomId}`)
-        .on('postgres_changes', {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `room_id=eq.${roomId}`,
-        }, async (payload) => {
-          const { data: sender } = await supabase
-            .from('profiles')
-            .select('name')
-            .eq('id', payload.new.sender_id)
-            .single()
-          
-          const newMsg = { ...payload.new, sender } as Message
-          setMessages(prev => [...prev, newMsg])
+      console.log('=== Realtime 구독 시작 ===')
+      console.log('roomId:', roomId)
+      
+      // 실시간 구독 - 올바른 방식
+      const channel = supabase.channel(`room-${roomId}`)
+      
+      channel
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+            filter: `room_id=eq.${roomId}`,
+          },
+          async (payload) => {
+            console.log('=== 새 메시지 수신! ===', payload)
+            
+            const newMsg = payload.new as any
+            
+            // sender 정보 가져오기
+            const { data: sender } = await supabase
+              .from('profiles')
+              .select('name')
+              .eq('id', newMsg.sender_id)
+              .single()
+            
+            const messageWithSender = { ...newMsg, sender } as Message
+            
+            setMessages(prev => {
+              // 중복 방지
+              if (prev.some(m => m.id === messageWithSender.id)) {
+                return prev
+              }
+              return [...prev, messageWithSender]
+            })
+          }
+        )
+        .subscribe((status) => {
+          console.log('=== 구독 상태 ===', status)
         })
-        .subscribe()
       
       return () => {
+        console.log('=== 구독 해제 ===')
         supabase.removeChannel(channel)
       }
     }
@@ -108,6 +131,7 @@ export default function ChatWindow() {
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession()
+    console.log('현재 로그인 유저:', session?.user?.email)
     if (session?.user) { setUser(session.user) }
     setLoading(false)
   }
@@ -118,12 +142,15 @@ export default function ChatWindow() {
   }
 
   const fetchMessages = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('messages')
       .select('*, sender:profiles!sender_id(name)')
       .eq('room_id', roomId)
       .order('created_at', { ascending: true })
       .limit(100)
+    
+    console.log('메시지 로드:', data?.length, '개')
+    if (error) console.error('메시지 로드 에러:', error)
     if (data) setMessages(data)
   }
 
@@ -159,17 +186,23 @@ export default function ChatWindow() {
   const handleSend = async () => {
     if (!newMessage.trim() || !roomId || !user) return
     
-    const { error } = await supabase.from('messages').insert({
+    console.log('=== 메시지 전송 시도 ===')
+    console.log('room_id:', roomId)
+    console.log('sender_id:', user.id)
+    console.log('content:', newMessage.trim())
+    
+    const { data, error } = await supabase.from('messages').insert({
       content: newMessage.trim(),
       content_type: 'text',
       sender_id: user.id,
       room_id: roomId,
-    })
+    }).select()
     
     if (error) {
       console.error('메시지 전송 오류:', error)
       alert('메시지 전송에 실패했습니다: ' + error.message)
     } else {
+      console.log('메시지 전송 성공:', data)
       setNewMessage('')
     }
   }
@@ -456,7 +489,7 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* 게시판 모달 - 메신저 밖에서도 열림 */}
+      {/* 게시판 모달 */}
       {showBoardModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" onClick={() => setShowBoardModal(false)}>
           <div className="bg-white rounded-xl w-96 max-h-[80vh] shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
