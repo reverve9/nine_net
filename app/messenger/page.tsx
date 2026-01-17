@@ -14,6 +14,7 @@ interface ChatRoom {
   last_message_time?: string
   unread_count?: number
   display_name?: string
+  is_pinned?: boolean
 }
 
 interface Member {
@@ -26,6 +27,13 @@ interface Member {
 
 type TabType = 'members' | 'chats' | 'settings'
 
+interface ContextMenu {
+  show: boolean
+  x: number
+  y: number
+  roomId: string
+}
+
 export default function MessengerMain() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<Member | null>(null)
@@ -36,12 +44,46 @@ export default function MessengerMain() {
   const [notificationEnabled, setNotificationEnabled] = useState(true)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [isElectron, setIsElectron] = useState(false)
+  const [contextMenu, setContextMenu] = useState<ContextMenu>({ show: false, x: 0, y: 0, roomId: '' })
+  const [pinnedRooms, setPinnedRooms] = useState<string[]>([])
 
   useEffect(() => { 
     checkAuth()
     setIsElectron(!!window.electronAPI?.isElectron)
+    
+    // 클릭시 컨텍스트 메뉴 닫기
+    const handleClick = () => setContextMenu(prev => ({ ...prev, show: false }))
+    window.addEventListener('click', handleClick)
+    return () => window.removeEventListener('click', handleClick)
   }, [])
-  useEffect(() => { if (user) { fetchProfile(); fetchRooms(); fetchMembers() } }, [user])
+  
+  useEffect(() => { 
+    if (user) { 
+      fetchProfile()
+      fetchRooms()
+      fetchMembers()
+      
+      // 실시간 메시지 구독 (채팅 리스트 업데이트용)
+      const channel = supabase.channel('messenger-updates')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages',
+          },
+          () => {
+            // 새 메시지 오면 채팅방 목록 새로고침
+            fetchRooms()
+          }
+        )
+        .subscribe()
+      
+      return () => {
+        supabase.removeChannel(channel)
+      }
+    }
+  }, [user])
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -55,7 +97,7 @@ export default function MessengerMain() {
   }
 
   const fetchRooms = async () => {
-    // 1. 나와의 채팅방 확인/생성
+    // 나와의 채팅방 확인/생성
     const { data: selfRoom } = await supabase
       .from('chat_rooms')
       .select('*')
@@ -71,12 +113,11 @@ export default function MessengerMain() {
         .single()
       
       if (newSelfRoom) {
-        // 나와의 채팅방에 나 추가
         await supabase.from('room_members').insert({ room_id: newSelfRoom.id, user_id: user.id })
       }
     }
 
-    // 2. 내가 참여중인 모든 채팅방 가져오기
+    // 내가 참여중인 모든 채팅방
     const { data: myMemberships } = await supabase
       .from('room_members')
       .select('room_id')
@@ -89,7 +130,6 @@ export default function MessengerMain() {
 
     const roomIds = myMemberships.map(m => m.room_id)
 
-    // 3. 채팅방 정보 가져오기
     const { data: allRooms } = await supabase
       .from('chat_rooms')
       .select('*')
@@ -108,7 +148,22 @@ export default function MessengerMain() {
             .limit(1)
             .single()
 
-          // 1:1 채팅인 경우 상대방 이름 표시
+          // 안 읽은 메시지 수
+          const { data: unreadMsgs } = await supabase
+            .from('messages')
+            .select('id, read_by')
+            .eq('room_id', room.id)
+            .neq('sender_id', user.id)
+
+          let unreadCount = 0
+          if (unreadMsgs) {
+            unreadCount = unreadMsgs.filter(msg => {
+              const readBy = msg.read_by || []
+              return !readBy.includes(user.id)
+            }).length
+          }
+
+          // 1:1 채팅인 경우 상대방 이름
           let displayName = room.name
           if (!room.is_group && !room.is_self) {
             const { data: roomMembers } = await supabase
@@ -137,13 +192,16 @@ export default function MessengerMain() {
             display_name: displayName,
             last_message: lastMsg?.content || '',
             last_message_time: lastMsg?.created_at || room.created_at,
-            unread_count: 0
+            unread_count: unreadCount,
+            is_pinned: pinnedRooms.includes(room.id)
           }
         })
       )
 
-      // 나와의 채팅 맨 위, 나머지는 최신 메시지 순
+      // 정렬: 고정 > 나와의 채팅 > 최신 메시지 순
       const sortedRooms = roomsWithMessages.sort((a, b) => {
+        if (a.is_pinned && !b.is_pinned) return -1
+        if (!a.is_pinned && b.is_pinned) return 1
         if (a.is_self) return -1
         if (b.is_self) return 1
         return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime()
@@ -173,7 +231,6 @@ export default function MessengerMain() {
   }
 
   const startDirectChat = async (member: Member) => {
-    // 1. 이미 존재하는 1:1 채팅방 찾기
     const { data: myMemberships } = await supabase
       .from('room_members')
       .select('room_id')
@@ -181,7 +238,6 @@ export default function MessengerMain() {
 
     if (myMemberships) {
       for (const membership of myMemberships) {
-        // 해당 방의 정보 확인
         const { data: room } = await supabase
           .from('chat_rooms')
           .select('*')
@@ -191,7 +247,6 @@ export default function MessengerMain() {
           .single()
 
         if (room) {
-          // 해당 방에 상대방이 있는지 확인
           const { data: memberInRoom } = await supabase
             .from('room_members')
             .select('user_id')
@@ -200,7 +255,6 @@ export default function MessengerMain() {
             .single()
 
           if (memberInRoom) {
-            // 이미 존재하는 1:1 채팅방
             openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] })
             return
           }
@@ -208,7 +262,6 @@ export default function MessengerMain() {
       }
     }
 
-    // 2. 새 1:1 채팅방 생성
     const roomName = `${profile?.name || user.email?.split('@')[0]} & ${member.name || member.email?.split('@')[0]}`
     
     const { data: newRoom } = await supabase
@@ -218,7 +271,6 @@ export default function MessengerMain() {
       .single()
 
     if (newRoom) {
-      // 양쪽 다 room_members에 추가
       await supabase.from('room_members').insert([
         { room_id: newRoom.id, user_id: user.id },
         { room_id: newRoom.id, user_id: member.id }
@@ -240,21 +292,57 @@ export default function MessengerMain() {
       .single()
 
     if (newRoom) {
-      // 생성자를 room_members에 추가
       await supabase.from('room_members').insert({ room_id: newRoom.id, user_id: user.id })
       await fetchRooms()
       openChatWindow(newRoom)
     }
   }
 
-  const leaveRoom = async (roomId: string, e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (!confirm('채팅방을 나가시겠습니까?')) return
+  const handleContextMenu = (e: React.MouseEvent, roomId: string) => {
+    e.preventDefault()
+    setContextMenu({
+      show: true,
+      x: e.clientX,
+      y: e.clientY,
+      roomId
+    })
+  }
+
+  const handleOpenRoom = () => {
+    const room = rooms.find(r => r.id === contextMenu.roomId)
+    if (room) openChatWindow(room)
+    setContextMenu(prev => ({ ...prev, show: false }))
+  }
+
+  const handlePinRoom = () => {
+    const roomId = contextMenu.roomId
+    if (pinnedRooms.includes(roomId)) {
+      setPinnedRooms(prev => prev.filter(id => id !== roomId))
+    } else {
+      setPinnedRooms(prev => [...prev, roomId])
+    }
+    setContextMenu(prev => ({ ...prev, show: false }))
+    fetchRooms()
+  }
+
+  const handleLeaveRoom = async () => {
+    const roomId = contextMenu.roomId
+    const room = rooms.find(r => r.id === roomId)
     
-    // room_members에서 나 삭제
+    if (room?.is_self) {
+      alert('나와의 채팅은 나갈 수 없습니다.')
+      setContextMenu(prev => ({ ...prev, show: false }))
+      return
+    }
+    
+    if (!confirm('채팅방을 나가시겠습니까?')) {
+      setContextMenu(prev => ({ ...prev, show: false }))
+      return
+    }
+    
     await supabase.from('room_members').delete().eq('room_id', roomId).eq('user_id', user.id)
-    
     setRooms(prev => prev.filter(r => r.id !== roomId))
+    setContextMenu(prev => ({ ...prev, show: false }))
   }
 
   const updateUserStatus = async (status: 'online' | 'away' | 'offline') => {
@@ -453,41 +541,31 @@ export default function MessengerMain() {
                   <div
                     key={room.id}
                     onClick={() => openChatWindow(room)}
-                    className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 cursor-pointer group"
+                    onContextMenu={(e) => handleContextMenu(e, room.id)}
+                    className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 cursor-pointer"
                   >
                     <div className="w-11 h-11 bg-gray-100 rounded-full flex items-center justify-center text-xl flex-shrink-0">
                       {room.is_self ? '📝' : room.is_group ? '👥' : '👤'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 truncate">
-                        {room.is_self ? '나와의 채팅' : (room.display_name || room.name)}
-                      </p>
+                      <div className="flex items-center gap-1">
+                        {room.is_pinned && <span className="text-xs">📌</span>}
+                        <p className="text-sm font-medium text-gray-800 truncate">
+                          {room.is_self ? '나와의 채팅' : (room.display_name || room.name)}
+                        </p>
+                      </div>
                       <p className="text-xs text-gray-400 truncate">
                         {room.last_message || (room.is_self ? '메모' : room.is_group ? '그룹' : '1:1')}
                       </p>
                     </div>
-                    {/* 우측 영역 */}
-                    <div className="w-20 flex items-center justify-end gap-1 flex-shrink-0">
-                      <div className="flex flex-col items-end">
-                        <span className="text-xs text-gray-400">{formatTime(room.last_message_time || '')}</span>
-                        {room.unread_count && room.unread_count > 0 ? (
-                          <span className="mt-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs rounded-full flex items-center justify-center px-1">
-                            {room.unread_count > 99 ? '99+' : room.unread_count}
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="w-6 flex items-center justify-center">
-                        {!room.is_self && (
-                          <button
-                            onClick={(e) => leaveRoom(room.id, e)}
-                            className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
+                    {/* 우측: 시간 + 안읽은 배지 */}
+                    <div className="flex flex-col items-end flex-shrink-0">
+                      <span className="text-[10px] text-gray-400">{formatTime(room.last_message_time || '')}</span>
+                      {room.unread_count && room.unread_count > 0 && (
+                        <span className="mt-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1">
+                          {room.unread_count > 99 ? '99+' : room.unread_count}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))
@@ -520,6 +598,33 @@ export default function MessengerMain() {
           )}
         </div>
       </div>
+
+      {/* 컨텍스트 메뉴 */}
+      {contextMenu.show && (
+        <div 
+          className="fixed bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+        >
+          <button
+            onClick={handleOpenRoom}
+            className="w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100"
+          >
+            열기
+          </button>
+          <button
+            onClick={handlePinRoom}
+            className="w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100"
+          >
+            {pinnedRooms.includes(contextMenu.roomId) ? '고정 해제' : '상단 고정'}
+          </button>
+          <button
+            onClick={handleLeaveRoom}
+            className="w-full px-4 py-2 text-sm text-left text-red-500 hover:bg-gray-100"
+          >
+            나가기
+          </button>
+        </div>
+      )}
 
       {/* 상태 변경 모달 */}
       {showProfileModal && (

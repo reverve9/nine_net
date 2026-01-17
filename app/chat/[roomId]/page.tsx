@@ -12,6 +12,7 @@ interface Message {
   room_id: string
   created_at: string
   reply_to?: string
+  read_by?: string[]
   sender?: { name: string }
 }
 
@@ -53,7 +54,7 @@ const renderMessageContent = (content: string, isMe: boolean) => {
           href={part}
           target="_blank"
           rel="noopener noreferrer"
-          className={`underline hover:opacity-80 ${isMe ? 'text-blue-700' : 'text-blue-500'}`}
+          className="underline hover:opacity-80"
           onClick={(e) => e.stopPropagation()}
         >
           {part}
@@ -105,6 +106,7 @@ export default function ChatWindow() {
       fetchMessages()
       fetchMembers()
       fetchBoardPosts()
+      markAsRead()
       
       const channel = supabase.channel(`room-${roomId}`)
       
@@ -134,6 +136,25 @@ export default function ChatWindow() {
               }
               return [...prev, messageWithSender]
             })
+            
+            // 새 메시지 읽음 처리
+            if (newMsg.sender_id !== user.id) {
+              markMessageAsRead(newMsg.id)
+            }
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'messages',
+            filter: `room_id=eq.${roomId}`,
+          },
+          (payload) => {
+            setMessages(prev => prev.map(m => 
+              m.id === payload.new.id ? { ...m, read_by: payload.new.read_by } : m
+            ))
           }
         )
         .subscribe()
@@ -193,6 +214,45 @@ export default function ChatWindow() {
     if (data) setBoardPosts(data)
   }
 
+  const markAsRead = async () => {
+    // 내가 보낸 메시지 제외하고 모두 읽음 처리
+    const { data: unreadMessages } = await supabase
+      .from('messages')
+      .select('id, read_by')
+      .eq('room_id', roomId)
+      .neq('sender_id', user.id)
+    
+    if (unreadMessages) {
+      for (const msg of unreadMessages) {
+        const readBy = msg.read_by || []
+        if (!readBy.includes(user.id)) {
+          await supabase
+            .from('messages')
+            .update({ read_by: [...readBy, user.id] })
+            .eq('id', msg.id)
+        }
+      }
+    }
+  }
+
+  const markMessageAsRead = async (messageId: string) => {
+    const { data: msg } = await supabase
+      .from('messages')
+      .select('read_by')
+      .eq('id', messageId)
+      .single()
+    
+    if (msg) {
+      const readBy = msg.read_by || []
+      if (!readBy.includes(user.id)) {
+        await supabase
+          .from('messages')
+          .update({ read_by: [...readBy, user.id] })
+          .eq('id', messageId)
+      }
+    }
+  }
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
@@ -205,6 +265,7 @@ export default function ChatWindow() {
       content_type: 'text',
       sender_id: user.id,
       room_id: roomId,
+      read_by: [user.id],
     }
     
     if (replyTo) {
@@ -232,7 +293,6 @@ export default function ChatWindow() {
     const value = e.target.value
     setNewMessage(value)
     
-    // @ 멘션 감지
     const lastAtIndex = value.lastIndexOf('@')
     if (lastAtIndex !== -1) {
       const textAfterAt = value.slice(lastAtIndex + 1)
@@ -266,6 +326,7 @@ export default function ChatWindow() {
       content_type: 'file',
       sender_id: user.id,
       room_id: roomId,
+      read_by: [user.id],
     })
     setFilePath('')
     setShowFileModal(false)
@@ -333,6 +394,14 @@ export default function ChatWindow() {
     return messages.find(m => m.id === replyToId)
   }
 
+  const getUnreadCount = (msg: Message) => {
+    if (msg.sender_id !== user?.id) return 0
+    const readBy = msg.read_by || []
+    const totalMembers = roomMembers.length
+    const readCount = readBy.length
+    return Math.max(0, totalMembers - readCount)
+  }
+
   const filteredMessages = searchQuery 
     ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
     : messages
@@ -346,7 +415,6 @@ export default function ChatWindow() {
     return name.includes(mentionFilter)
   })
 
-  // 멤버 수 계산 (중복 제거)
   const memberCount = roomMembers.length
 
   if (loading) {
@@ -462,8 +530,8 @@ export default function ChatWindow() {
             const isMe = msg.sender_id === user.id
             const isFile = msg.content_type === 'file'
             const replyMsg = msg.reply_to ? getReplyMessage(msg.reply_to) : null
+            const unreadCount = getUnreadCount(msg)
             
-            // 이전 메시지와 같은 사람인지 확인 (연속 메시지)
             const prevMsg = index > 0 ? filteredMessages[index - 1] : null
             const isSameSender = prevMsg && prevMsg.sender_id === msg.sender_id
             const showProfile = !isMe && !room?.is_self && !isSameSender
@@ -502,12 +570,20 @@ export default function ChatWindow() {
                       </button>
                     )}
                     
-                    {isMe && <p className="text-xs text-gray-400 mb-0.5">{formatTime(msg.created_at)}</p>}
+                    {/* 내 메시지: 읽음 표시 + 시간 */}
+                    {isMe && (
+                      <div className="flex flex-col items-end justify-end mb-0.5">
+                        {unreadCount > 0 && (
+                          <span className="text-xs text-yellow-400">{unreadCount}</span>
+                        )}
+                        <span className="text-xs text-gray-400">{formatTime(msg.created_at)}</span>
+                      </div>
+                    )}
                     
                     <div>
                       {/* 답장 표시 */}
                       {replyMsg && (
-                        <div className={`text-xs px-2 py-1 mb-1 rounded ${isMe ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-600'}`}>
+                        <div className={`text-xs px-2 py-1 mb-1 rounded ${isMe ? 'bg-blue-300/50 text-gray-800' : 'bg-gray-200 text-gray-600'}`}>
                           <span className="font-medium">{replyMsg.sender?.name || '알 수 없음'}</span>에게 답장
                           <p className="truncate">{replyMsg.content}</p>
                         </div>
@@ -518,7 +594,7 @@ export default function ChatWindow() {
                           onClick={() => openFilePath(msg.content)}
                           className={`px-3 py-2 text-sm flex items-center gap-2 ${
                             isMe 
-                              ? 'bg-[#d4e5f7] text-gray-900 rounded-lg rounded-br-sm' 
+                              ? 'bg-[#aacbec] text-gray-900 rounded-lg rounded-br-sm' 
                               : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
                           }`}
                         >
@@ -530,7 +606,7 @@ export default function ChatWindow() {
                       ) : (
                         <div className={`px-3 py-2 text-sm whitespace-pre-wrap break-all ${
                           isMe 
-                            ? 'bg-[#d4e5f7] text-gray-900 rounded-lg rounded-br-sm' 
+                            ? 'bg-[#aacbec] text-gray-900 rounded-lg rounded-br-sm' 
                             : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
                         }`}>
                           {renderMessageContent(msg.content, isMe)}
@@ -538,7 +614,10 @@ export default function ChatWindow() {
                       )}
                     </div>
                     
-                    {!isMe && <p className="text-xs text-gray-400 mb-0.5">{formatTime(msg.created_at)}</p>}
+                    {/* 상대방 메시지: 시간 */}
+                    {!isMe && (
+                      <span className="text-xs text-gray-400 self-end mb-0.5">{formatTime(msg.created_at)}</span>
+                    )}
                     
                     {/* 답장 버튼 (상대방 메시지) */}
                     {!isMe && (
