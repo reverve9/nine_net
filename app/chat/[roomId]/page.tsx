@@ -39,6 +39,30 @@ interface BoardPost {
   author?: { name: string }
 }
 
+// URL을 링크로 변환하는 함수
+const renderMessageContent = (content: string) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  const parts = content.split(urlRegex)
+  
+  return parts.map((part, index) => {
+    if (urlRegex.test(part)) {
+      return (
+        <a 
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:opacity-80"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      )
+    }
+    return part
+  })
+}
+
 export default function ChatWindow() {
   const params = useParams()
   const roomId = params.roomId as string
@@ -78,10 +102,6 @@ export default function ChatWindow() {
       fetchMembers()
       fetchBoardPosts()
       
-      console.log('=== Realtime 구독 시작 ===')
-      console.log('roomId:', roomId)
-      
-      // 실시간 구독 - 올바른 방식
       const channel = supabase.channel(`room-${roomId}`)
       
       channel
@@ -94,11 +114,8 @@ export default function ChatWindow() {
             filter: `room_id=eq.${roomId}`,
           },
           async (payload) => {
-            console.log('=== 새 메시지 수신! ===', payload)
-            
             const newMsg = payload.new as any
             
-            // sender 정보 가져오기
             const { data: sender } = await supabase
               .from('profiles')
               .select('name')
@@ -108,7 +125,6 @@ export default function ChatWindow() {
             const messageWithSender = { ...newMsg, sender } as Message
             
             setMessages(prev => {
-              // 중복 방지
               if (prev.some(m => m.id === messageWithSender.id)) {
                 return prev
               }
@@ -116,12 +132,9 @@ export default function ChatWindow() {
             })
           }
         )
-        .subscribe((status) => {
-          console.log('=== 구독 상태 ===', status)
-        })
+        .subscribe()
       
       return () => {
-        console.log('=== 구독 해제 ===')
         supabase.removeChannel(channel)
       }
     }
@@ -131,7 +144,6 @@ export default function ChatWindow() {
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession()
-    console.log('현재 로그인 유저:', session?.user?.email)
     if (session?.user) { setUser(session.user) }
     setLoading(false)
   }
@@ -142,15 +154,13 @@ export default function ChatWindow() {
   }
 
   const fetchMessages = async () => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('messages')
       .select('*, sender:profiles!sender_id(name)')
       .eq('room_id', roomId)
       .order('created_at', { ascending: true })
       .limit(100)
     
-    console.log('메시지 로드:', data?.length, '개')
-    if (error) console.error('메시지 로드 에러:', error)
     if (data) setMessages(data)
   }
 
@@ -186,23 +196,16 @@ export default function ChatWindow() {
   const handleSend = async () => {
     if (!newMessage.trim() || !roomId || !user) return
     
-    console.log('=== 메시지 전송 시도 ===')
-    console.log('room_id:', roomId)
-    console.log('sender_id:', user.id)
-    console.log('content:', newMessage.trim())
-    
-    const { data, error } = await supabase.from('messages').insert({
+    const { error } = await supabase.from('messages').insert({
       content: newMessage.trim(),
       content_type: 'text',
       sender_id: user.id,
       room_id: roomId,
-    }).select()
+    })
     
     if (error) {
-      console.error('메시지 전송 오류:', error)
       alert('메시지 전송에 실패했습니다: ' + error.message)
     } else {
-      console.log('메시지 전송 성공:', data)
       setNewMessage('')
     }
   }
@@ -314,13 +317,12 @@ export default function ChatWindow() {
   const roomName = room?.is_self ? '나와의 채팅' : room?.name || '채팅'
 
   return (
-    <div className="h-screen flex flex-col bg-[#9bbbd4] overflow-hidden">
-      {/* 헤더 전체가 드래그 영역 */}
+    <div className="h-screen flex flex-col bg-[#b4c7d6] overflow-hidden">
+      {/* 헤더 */}
       <div 
-        className="bg-[#9bbbd4] flex-shrink-0 px-3 py-2"
+        className="bg-[#b4c7d6] flex-shrink-0 px-3 py-2"
         style={{ WebkitAppRegion: 'drag' } as any}
       >
-        {/* 상단 영역 - 신호등 + 빈 공간 (드래그용) */}
         <div className="flex items-center justify-between mb-2 min-h-[20px]">
           {isElectron && (
             <div className="flex gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
@@ -332,7 +334,6 @@ export default function ChatWindow() {
           <div className="flex-1" />
         </div>
         
-        {/* 프로필 + 버튼들 */}
         <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <div className="w-10 h-10 bg-white/50 rounded-full flex items-center justify-center text-lg flex-shrink-0">
             {room?.is_self ? '📝' : room?.is_group ? '👥' : '👤'}
@@ -385,7 +386,7 @@ export default function ChatWindow() {
 
       {/* 검색창 */}
       {showSearch && (
-        <div className="px-3 py-2 bg-[#9bbbd4] flex-shrink-0">
+        <div className="px-3 py-2 bg-[#b4c7d6] flex-shrink-0">
           <input
             type="text"
             placeholder="대화 내용 검색..."
@@ -426,18 +427,18 @@ export default function ChatWindow() {
                             : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
                         }`}
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
-                        <span className="underline truncate max-w-[150px]">{msg.content.split(/[/\\]/).pop() || msg.content}</span>
+                        <span className="underline break-all">{msg.content.split(/[/\\]/).pop() || msg.content}</span>
                       </button>
                     ) : (
-                      <div className={`px-3 py-2 text-sm whitespace-pre-wrap ${
+                      <div className={`px-3 py-2 text-sm whitespace-pre-wrap break-all ${
                         isMe 
                           ? 'bg-[#5b9bd5] text-white rounded-lg rounded-br-sm' 
                           : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
                       }`}>
-                        {msg.content}
+                        {renderMessageContent(msg.content)}
                       </div>
                     )}
                     
@@ -491,8 +492,12 @@ export default function ChatWindow() {
 
       {/* 게시판 모달 */}
       {showBoardModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" onClick={() => setShowBoardModal(false)}>
-          <div className="bg-white rounded-xl w-96 max-h-[80vh] shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-black/30 flex items-center justify-center" 
+          style={{ zIndex: 99999 }}
+          onClick={() => setShowBoardModal(false)}
+        >
+          <div className="bg-white rounded-xl w-[360px] max-h-[80vh] shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
               <p className="font-medium text-gray-800">📋 게시판</p>
               <div className="flex items-center gap-2">
@@ -528,7 +533,6 @@ export default function ChatWindow() {
                           <button
                             onClick={() => handleToggleImportant(post.id, post.is_important)}
                             className={`p-1 rounded ${post.is_important ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'}`}
-                            title={post.is_important ? '중요 해제' : '중요 표시'}
                           >
                             📌
                           </button>
@@ -553,8 +557,12 @@ export default function ChatWindow() {
 
       {/* 새 게시글 작성 모달 */}
       {showNewPostModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[10000]" onClick={() => setShowNewPostModal(false)}>
-          <div className="bg-white rounded-xl p-4 w-80 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-black/30 flex items-center justify-center" 
+          style={{ zIndex: 100000 }}
+          onClick={() => setShowNewPostModal(false)}
+        >
+          <div className="bg-white rounded-xl p-4 w-[360px] shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">새 게시글</p>
               <button onClick={() => setShowNewPostModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -607,8 +615,12 @@ export default function ChatWindow() {
 
       {/* 멤버 목록 모달 */}
       {showMembersModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" onClick={() => setShowMembersModal(false)}>
-          <div className="bg-white rounded-xl p-4 w-64 max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-black/30 flex items-center justify-center" 
+          style={{ zIndex: 99999 }}
+          onClick={() => setShowMembersModal(false)}
+        >
+          <div className="bg-white rounded-xl p-4 w-[360px] max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">참여 멤버 ({memberCount})</p>
               <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -633,8 +645,12 @@ export default function ChatWindow() {
 
       {/* 멤버 초대 모달 */}
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" onClick={() => setShowInviteModal(false)}>
-          <div className="bg-white rounded-xl p-4 w-64 max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-black/30 flex items-center justify-center" 
+          style={{ zIndex: 99999 }}
+          onClick={() => setShowInviteModal(false)}
+        >
+          <div className="bg-white rounded-xl p-4 w-[360px] max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">멤버 초대</p>
               <button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -665,8 +681,12 @@ export default function ChatWindow() {
 
       {/* 파일 경로 입력 모달 */}
       {showFileModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" onClick={() => setShowFileModal(false)}>
-          <div className="bg-white rounded-xl p-4 w-72 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-black/30 flex items-center justify-center" 
+          style={{ zIndex: 99999 }}
+          onClick={() => setShowFileModal(false)}
+        >
+          <div className="bg-white rounded-xl p-4 w-[360px] shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">파일 경로 공유</p>
               <button onClick={() => setShowFileModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>

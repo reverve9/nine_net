@@ -54,7 +54,6 @@ export default function MessengerMain() {
   }
 
   const fetchRooms = async () => {
-    // 내 나와의 채팅방만 확인/생성
     const { data: selfRoom } = await supabase
       .from('chat_rooms')
       .select('*')
@@ -66,7 +65,6 @@ export default function MessengerMain() {
       await supabase.from('chat_rooms').insert({ name: '나와의 채팅', is_group: false, is_self: true, created_by: user.id })
     }
 
-    // 내가 만든 채팅방만 가져오기
     const { data: allRooms } = await supabase
       .from('chat_rooms')
       .select('*')
@@ -76,7 +74,6 @@ export default function MessengerMain() {
     if (allRooms) {
       const roomsWithMessages = await Promise.all(
         allRooms.map(async (room) => {
-          // 최신 메시지
           const { data: lastMsg } = await supabase
             .from('messages')
             .select('content, created_at')
@@ -85,8 +82,6 @@ export default function MessengerMain() {
             .limit(1)
             .single()
 
-          // 안 읽은 메시지 수 (내가 보낸 것 제외)
-          // 실제로는 read_at 컬럼이 필요하지만, 일단 0으로
           return {
             ...room,
             last_message: lastMsg?.content || '',
@@ -96,7 +91,6 @@ export default function MessengerMain() {
         })
       )
 
-      // 나와의 채팅 맨 위, 나머지는 최신 메시지 순
       const sortedRooms = roomsWithMessages.sort((a, b) => {
         if (a.is_self) return -1
         if (b.is_self) return 1
@@ -229,7 +223,7 @@ export default function MessengerMain() {
 
   return (
     <div className="h-screen flex bg-white overflow-hidden">
-      {/* 사이드바 + 헤더 드래그 영역 */}
+      {/* 사이드바 */}
       <div 
         className="w-[70px] bg-gray-100 flex flex-col items-center pt-3 pb-4"
         style={{ WebkitAppRegion: 'drag' } as any}
@@ -282,7 +276,7 @@ export default function MessengerMain() {
 
       {/* 메인 영역 */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* 헤더 - 드래그 가능 */}
+        {/* 헤더 */}
         <div 
           className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0"
           style={{ WebkitAppRegion: 'drag' } as any}
@@ -308,7 +302,7 @@ export default function MessengerMain() {
           {/* 멤버 리스트 */}
           {activeTab === 'members' && (
             <div>
-              {/* 나 - 프로필 영역만 클릭시 상태 모달 */}
+              {/* 나 */}
               <div className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50">
                 <div 
                   className="relative flex-shrink-0 cursor-pointer"
@@ -382,26 +376,30 @@ export default function MessengerMain() {
                       <p className="text-sm font-medium text-gray-800 truncate">{room.is_self ? '나와의 채팅' : room.name}</p>
                       <p className="text-xs text-gray-400 truncate">{room.last_message || (room.is_self ? '메모' : room.is_group ? '그룹' : '1:1')}</p>
                     </div>
-                    {/* 우측 영역 - 고정 너비 */}
-                    <div className="w-16 flex flex-col items-end flex-shrink-0">
-                      <span className="text-xs text-gray-400">{formatTime(room.last_message_time || '')}</span>
-                      {room.unread_count && room.unread_count > 0 ? (
-                        <span className="mt-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs rounded-full flex items-center justify-center px-1">
-                          {room.unread_count > 99 ? '99+' : room.unread_count}
-                        </span>
-                      ) : null}
+                    {/* 우측 영역 - 모든 아이템 동일한 너비 */}
+                    <div className="w-20 flex items-center justify-end gap-1 flex-shrink-0">
+                      <div className="flex flex-col items-end">
+                        <span className="text-xs text-gray-400">{formatTime(room.last_message_time || '')}</span>
+                        {room.unread_count && room.unread_count > 0 ? (
+                          <span className="mt-1 min-w-[18px] h-[18px] bg-red-500 text-white text-xs rounded-full flex items-center justify-center px-1">
+                            {room.unread_count > 99 ? '99+' : room.unread_count}
+                          </span>
+                        ) : null}
+                      </div>
+                      {/* 나가기 버튼 - 나와의 채팅 제외, 항상 공간 차지 */}
+                      <div className="w-6 flex items-center justify-center">
+                        {!room.is_self && (
+                          <button
+                            onClick={(e) => leaveRoom(room.id, e)}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    {/* 나가기 버튼 */}
-                    {!room.is_self && (
-                      <button
-                        onClick={(e) => leaveRoom(room.id, e)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition flex-shrink-0"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                        </svg>
-                      </button>
-                    )}
                   </div>
                 ))
               )}
@@ -436,8 +434,12 @@ export default function MessengerMain() {
 
       {/* 상태 변경 모달 */}
       {showProfileModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowProfileModal(false)}>
-          <div className="bg-white rounded-xl p-4 w-52 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-black/30 flex items-center justify-center" 
+          style={{ zIndex: 99999 }}
+          onClick={() => setShowProfileModal(false)}
+        >
+          <div className="bg-white rounded-xl p-4 w-[360px] shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex flex-col items-center mb-3">
               <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center text-2xl mb-2">👤</div>
               <p className="font-medium text-gray-800 text-sm">{profile?.name || user.email?.split('@')[0]}</p>
