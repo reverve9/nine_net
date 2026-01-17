@@ -121,16 +121,20 @@ export default function ChatWindow() {
           async (payload) => {
             const newMsg = payload.new as any
             
-            // 중복 방지: 이미 있는 메시지면 무시
+            // sender 정보 가져오기
+            const { data: sender } = await supabase
+              .from('profiles')
+              .select('name')
+              .eq('id', newMsg.sender_id)
+              .single()
+            
+            // 중복 방지하고 메시지 추가
             setMessages(prev => {
               if (prev.some(m => m.id === newMsg.id)) {
                 return prev
               }
-              return prev // 일단 무시, fetchMessages에서 처리
+              return [...prev, { ...newMsg, sender }]
             })
-            
-            // 새 메시지 가져오기
-            fetchMessages()
             
             // 새 메시지 읽음 처리 (내가 보낸 게 아니면)
             if (newMsg.sender_id !== user.id) {
@@ -317,14 +321,15 @@ export default function ChatWindow() {
       messageData.reply_to = replyTo.id
     }
     
+    // 입력창 먼저 비우기
+    setNewMessage('')
+    setReplyTo(null)
+    
     // 메시지 전송 (실시간 구독에서 처리됨)
     const { error } = await supabase.from('messages').insert(messageData)
     
     if (error) {
       alert('메시지 전송에 실패했습니다: ' + error.message)
-    } else {
-      setNewMessage('')
-      setReplyTo(null)
     }
   }
 
@@ -398,7 +403,8 @@ export default function ChatWindow() {
     const { error } = await supabase
       .from('room_members')
       .delete()
-      .eq('room_id', roomId).eq('user_id', user.id)
+      .eq('room_id', roomId)
+      .eq('user_id', user.id)
     
     if (error) {
       console.error('나가기 실패:', error)
