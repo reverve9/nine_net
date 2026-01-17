@@ -16,13 +16,28 @@ interface FloatingChatProps {
   user: any
 }
 
+declare global {
+  interface Window {
+    electronAPI?: {
+      isElectron: boolean
+      toggleMessenger: () => void
+    }
+  }
+}
+
 export default function FloatingChat({ user }: FloatingChatProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState('')
   const [roomId, setRoomId] = useState<string | null>(null)
   const [unreadCount, setUnreadCount] = useState(0)
+  const [isElectron, setIsElectron] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    // Electron 환경 체크
+    setIsElectron(!!window.electronAPI?.isElectron)
+  }, [])
 
   useEffect(() => {
     if (user) {
@@ -116,14 +131,24 @@ export default function FloatingChat({ user }: FloatingChatProps) {
     })
   }
 
+  const handleButtonClick = () => {
+    if (isElectron && window.electronAPI) {
+      // Electron: 독립 창 열기
+      window.electronAPI.toggleMessenger()
+    } else {
+      // 웹: 플로팅 팝업
+      setIsOpen(!isOpen)
+    }
+  }
+
   return (
     <>
       {/* 플로팅 버튼 */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleButtonClick}
         className="fixed bottom-6 right-6 w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition flex items-center justify-center z-50"
       >
-        {isOpen ? (
+        {isOpen && !isElectron ? (
           <span className="text-2xl">×</span>
         ) : (
           <>
@@ -137,8 +162,8 @@ export default function FloatingChat({ user }: FloatingChatProps) {
         )}
       </button>
 
-      {/* 채팅창 */}
-      {isOpen && (
+      {/* 채팅창 - 웹에서만 표시 */}
+      {isOpen && !isElectron && (
         <div className="fixed bottom-24 right-6 w-80 h-96 bg-white rounded-2xl shadow-2xl flex flex-col z-50 border border-gray-200 overflow-hidden">
           {/* 헤더 */}
           <div className="px-4 py-3 bg-blue-500 text-white flex items-center justify-between">

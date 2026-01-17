@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, Tray, Menu, screen } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, screen, ipcMain } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
@@ -42,6 +42,7 @@ function createMainWindow() {
 
 function createMessengerWindow() {
   if (messengerWindow) {
+    messengerWindow.show();
     messengerWindow.focus();
     return;
   }
@@ -100,6 +101,21 @@ function createTray() {
   tray.setContextMenu(contextMenu);
   tray.on('click', toggleMessengerWindow);
 }
+
+// IPC 통신 - 웹에서 메신저 창 제어
+ipcMain.on('open-messenger', () => {
+  createMessengerWindow();
+});
+
+ipcMain.on('close-messenger', () => {
+  if (messengerWindow) {
+    messengerWindow.hide();
+  }
+});
+
+ipcMain.on('toggle-messenger', () => {
+  toggleMessengerWindow();
+});
 
 autoUpdater.on('update-available', () => {
   console.log('업데이트가 있습니다. 다운로드 중...');

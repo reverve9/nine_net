@@ -1,6 +1,8 @@
-const { contextBridge } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   isElectron: true,
-  isPopup: window.location.pathname.includes('messenger-popup'),
+  openMessenger: () => ipcRenderer.send('open-messenger'),
+  closeMessenger: () => ipcRenderer.send('close-messenger'),
+  toggleMessenger: () => ipcRenderer.send('toggle-messenger'),
 });
