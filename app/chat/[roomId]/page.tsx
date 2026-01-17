@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation'
 interface Message {
   id: string
   content: string
-  content_type: 'text' | 'file'
+  content_type?: 'text' | 'file'
   sender_id: string
   room_id: string
   created_at: string
@@ -40,8 +40,9 @@ export default function ChatWindow() {
   const [showSearch, setShowSearch] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showMembersModal, setShowMembersModal] = useState(false)
   const [allMembers, setAllMembers] = useState<Member[]>([])
-  const [roomMembers, setRoomMembers] = useState<string[]>([])
+  const [roomMembers, setRoomMembers] = useState<Member[]>([])
   const [showFileModal, setShowFileModal] = useState(false)
   const [filePath, setFilePath] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -76,16 +77,18 @@ export default function ChatWindow() {
   }
 
   const fetchMembers = async () => {
-    // 전체 멤버
     const { data: all } = await supabase.from('profiles').select('id, name, email')
     if (all) setAllMembers(all)
     
-    // 채팅방 멤버 (room_members 테이블이 있다면)
     const { data: members } = await supabase
       .from('room_members')
-      .select('user_id')
+      .select('user_id, profiles:user_id(id, name, email)')
       .eq('room_id', roomId)
-    if (members) setRoomMembers(members.map(m => m.user_id))
+    
+    if (members) {
+      const memberList = members.map((m: any) => m.profiles).filter(Boolean)
+      setRoomMembers(memberList)
+    }
   }
 
   const subscribeToMessages = () => {
@@ -120,9 +123,8 @@ export default function ChatWindow() {
     })
     setNewMessage('')
     
-    // textarea 높이 리셋
     if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = '60px'
     }
   }
 
@@ -135,11 +137,9 @@ export default function ChatWindow() {
 
   const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setNewMessage(e.target.value)
-    
-    // 자동 높이 조절
     const textarea = e.target
-    textarea.style.height = 'auto'
-    textarea.style.height = Math.min(textarea.scrollHeight, 100) + 'px'
+    textarea.style.height = '60px'
+    textarea.style.height = Math.min(Math.max(textarea.scrollHeight, 60), 120) + 'px'
   }
 
   const handleSendFile = async () => {
@@ -156,34 +156,24 @@ export default function ChatWindow() {
   }
 
   const handleInviteMember = async (memberId: string) => {
-    // room_members에 추가
     await supabase.from('room_members').insert({
       room_id: roomId,
       user_id: memberId,
     })
-    setRoomMembers(prev => [...prev, memberId])
+    const member = allMembers.find(m => m.id === memberId)
+    if (member) setRoomMembers(prev => [...prev, member])
   }
 
   const handleClose = () => {
-    if (window.electronAPI?.closeWindow) {
-      window.electronAPI.closeWindow()
-    }
+    window.electronAPI?.closeWindow?.()
   }
 
   const handleMinimize = () => {
-    if (window.electronAPI?.minimizeWindow) {
-      window.electronAPI.minimizeWindow()
-    }
+    window.electronAPI?.minimizeWindow?.()
   }
 
   const openFilePath = (path: string) => {
-    // Electron에서 파일 경로 열기
-    if (window.electronAPI?.isElectron) {
-      // shell.openPath 호출 필요 (preload에 추가해야 함)
-      alert(`파일 경로: ${path}\n\n이 경로를 파일 탐색기에서 열어주세요.`)
-    } else {
-      alert(`파일 경로: ${path}`)
-    }
+    alert(`파일 경로: ${path}\n\n이 경로를 파일 탐색기에서 열어주세요.`)
   }
 
   const formatTime = (dateString: string) => {
@@ -195,8 +185,10 @@ export default function ChatWindow() {
     : messages
 
   const availableMembers = allMembers.filter(m => 
-    m.id !== user?.id && !roomMembers.includes(m.id)
+    m.id !== user?.id && !roomMembers.some(rm => rm.id === m.id)
   )
+
+  const memberCount = roomMembers.length + 1
 
   if (loading) {
     return (
@@ -217,12 +209,12 @@ export default function ChatWindow() {
   const roomName = room?.is_self ? '나와의 채팅' : room?.name || '채팅'
 
   return (
-    <div className="h-screen flex flex-col bg-[#b2c7d9] overflow-hidden">
+    <div 
+      className="h-screen flex flex-col bg-[#9bbbd4] overflow-hidden"
+      style={{ WebkitAppRegion: 'drag' } as any}
+    >
       {/* 헤더 */}
-      <div 
-        className="bg-[#b2c7d9] px-3 pt-2 pb-3"
-        style={{ WebkitAppRegion: 'drag' } as any}
-      >
+      <div className="bg-[#9bbbd4] px-3 pt-2 pb-3">
         {/* 신호등 버튼 */}
         {isElectron && (
           <div className="flex gap-2 mb-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
@@ -240,10 +232,18 @@ export default function ChatWindow() {
           
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-gray-800 truncate">{roomName}</p>
-            {room?.is_group && <p className="text-xs text-gray-600">{roomMembers.length + 1}명 참여중</p>}
+            {!room?.is_self && (
+              <button 
+                onClick={() => setShowMembersModal(true)}
+                className="text-xs text-gray-600 hover:underline"
+              >
+                {memberCount}명 참여중
+              </button>
+            )}
           </div>
           
           <div className="flex items-center gap-1">
+            {/* 검색 버튼 */}
             <button
               onClick={() => setShowSearch(!showSearch)}
               className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-black/10 rounded-full transition"
@@ -253,6 +253,7 @@ export default function ChatWindow() {
               </svg>
             </button>
             
+            {/* 초대 버튼 */}
             {!room?.is_self && (
               <button
                 onClick={() => setShowInviteModal(true)}
@@ -265,25 +266,29 @@ export default function ChatWindow() {
             )}
           </div>
         </div>
-        
-        {showSearch && (
-          <div className="mt-2">
-            <input
-              type="text"
-              placeholder="대화 내용 검색..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full px-3 py-1.5 text-sm bg-white/70 rounded-lg focus:outline-none focus:bg-white"
-              autoFocus
-            />
-          </div>
-        )}
       </div>
 
+      {/* 검색창 (하단에 표시) */}
+      {showSearch && (
+        <div className="px-3 py-2 bg-[#9bbbd4]" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <input
+            type="text"
+            placeholder="대화 내용 검색..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full px-3 py-2 text-sm bg-white rounded-lg focus:outline-none"
+            autoFocus
+          />
+        </div>
+      )}
+
       {/* 메시지 목록 */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div 
+        className="flex-1 overflow-y-auto p-3 space-y-2"
+        style={{ WebkitAppRegion: 'no-drag' } as any}
+      >
         {filteredMessages.length === 0 ? (
-          <p className="text-center text-gray-500 text-xs mt-8">
+          <p className="text-center text-gray-600 text-xs mt-8">
             {searchQuery ? '검색 결과가 없습니다' : room?.is_self ? '메모를 작성해보세요 ✏️' : '첫 메시지를 보내보세요 👋'}
           </p>
         ) : (
@@ -303,18 +308,22 @@ export default function ChatWindow() {
                     {isFile ? (
                       <button
                         onClick={() => openFilePath(msg.content)}
-                        className={`px-3 py-2 rounded-xl text-sm flex items-center gap-2 ${
-                          isMe ? 'bg-[#fee500] text-gray-900 rounded-br-sm' : 'bg-white text-gray-900 rounded-bl-sm'
+                        className={`px-3 py-2 text-sm flex items-center gap-2 ${
+                          isMe 
+                            ? 'bg-[#5b9bd5] text-white rounded-lg rounded-br-sm' 
+                            : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
                         }`}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
-                        <span className="underline truncate max-w-[150px]">{msg.content.split('/').pop() || msg.content}</span>
+                        <span className="underline truncate max-w-[150px]">{msg.content.split(/[/\\]/).pop() || msg.content}</span>
                       </button>
                     ) : (
-                      <div className={`px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${
-                        isMe ? 'bg-[#fee500] text-gray-900 rounded-br-sm' : 'bg-white text-gray-900 rounded-bl-sm'
+                      <div className={`px-3 py-2 text-sm whitespace-pre-wrap ${
+                        isMe 
+                          ? 'bg-[#5b9bd5] text-white rounded-lg rounded-br-sm' 
+                          : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
                       }`}>
                         {msg.content}
                       </div>
@@ -331,40 +340,79 @@ export default function ChatWindow() {
       </div>
 
       {/* 입력창 - 카카오톡 스타일 */}
-      <div className="bg-white border-t border-gray-200">
-        {/* 상단 아이콘 바 */}
-        <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
-          <button
-            onClick={() => setShowFileModal(true)}
-            className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-            </svg>
-          </button>
-        </div>
-        
-        {/* 텍스트 입력 + 전송 */}
-        <div className="flex items-end gap-2 p-2">
+      <div 
+        className="bg-white"
+        style={{ WebkitAppRegion: 'no-drag' } as any}
+      >
+        {/* 텍스트 입력 */}
+        <div className="p-2">
           <textarea
             ref={textareaRef}
             value={newMessage}
             onChange={handleTextareaChange}
             onKeyDown={handleKeyDown}
             placeholder={room?.is_self ? '메모 입력...' : '메시지 입력...'}
-            rows={1}
-            className="flex-1 px-3 py-2 text-sm bg-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none overflow-hidden"
-            style={{ minHeight: '40px', maxHeight: '100px' }}
+            className="w-full px-3 py-2 text-sm bg-white rounded-lg focus:outline-none resize-none"
+            style={{ height: '60px', minHeight: '60px', maxHeight: '120px' }}
           />
+        </div>
+        
+        {/* 하단 툴바 */}
+        <div className="flex items-center justify-between px-2 pb-2">
+          {/* 왼쪽: 첨부 버튼 */}
+          <button
+            onClick={() => setShowFileModal(true)}
+            className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded transition"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            </svg>
+          </button>
+          
+          {/* 오른쪽: 전송 버튼 */}
           <button
             onClick={handleSend}
             disabled={!newMessage.trim()}
-            className="w-10 h-10 bg-[#fee500] text-gray-900 rounded-lg flex items-center justify-center hover:bg-[#fada0a] transition disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition ${
+              newMessage.trim() 
+                ? 'bg-[#5b9bd5] text-white hover:bg-[#4a8bc5]' 
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
           >
-            <span className="text-sm font-medium">전송</span>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
           </button>
         </div>
       </div>
+
+      {/* 멤버 목록 모달 */}
+      {showMembersModal && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowMembersModal(false)}>
+          <div className="bg-white rounded-xl p-4 w-64 max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="font-medium text-gray-800">참여중인 멤버 ({memberCount})</p>
+              <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            
+            <div className="space-y-1 max-h-52 overflow-y-auto">
+              {/* 나 */}
+              <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
+                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm">👤</div>
+                <p className="text-sm text-gray-800">나</p>
+              </div>
+              
+              {/* 다른 멤버들 */}
+              {roomMembers.map(member => (
+                <div key={member.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg">
+                  <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm">👤</div>
+                  <p className="text-sm text-gray-800">{member.name || member.email?.split('@')[0]}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 멤버 초대 모달 */}
       {showInviteModal && (
@@ -428,7 +476,7 @@ export default function ChatWindow() {
               <button
                 onClick={handleSendFile}
                 disabled={!filePath.trim()}
-                className="flex-1 py-2 text-sm text-gray-900 bg-[#fee500] rounded-lg hover:bg-[#fada0a] disabled:opacity-50"
+                className="flex-1 py-2 text-sm text-white bg-[#5b9bd5] rounded-lg hover:bg-[#4a8bc5] disabled:opacity-50"
               >
                 전송
               </button>

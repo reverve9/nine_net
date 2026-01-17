@@ -29,7 +29,6 @@ export default function MessengerMain() {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('members')
   const [notificationEnabled, setNotificationEnabled] = useState(true)
-  const [searchQuery, setSearchQuery] = useState('')
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [isElectron, setIsElectron] = useState(false)
 
@@ -152,9 +151,6 @@ export default function MessengerMain() {
     return <span className={`inline-block ${sizeClass} rounded-full ${colors[status] || 'bg-gray-400'}`}></span>
   }
 
-  const filteredRooms = rooms.filter(r => (r.is_self ? '나와의 채팅' : r.name).toLowerCase().includes(searchQuery.toLowerCase()))
-  const filteredMembers = members.filter(m => (m.name || m.email || '').toLowerCase().includes(searchQuery.toLowerCase()))
-
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-white">
@@ -172,26 +168,18 @@ export default function MessengerMain() {
   }
 
   return (
-    <div className="h-screen flex bg-white overflow-hidden">
-      {/* 사이드바 - 카카오톡 스타일 */}
-      <div 
-        className="w-[70px] bg-gray-100 flex flex-col items-center pt-3 pb-4"
-        style={{ WebkitAppRegion: 'drag' } as any}
-      >
+    <div 
+      className="h-screen flex bg-white overflow-hidden"
+      style={{ WebkitAppRegion: 'drag' } as any}
+    >
+      {/* 사이드바 */}
+      <div className="w-[70px] bg-gray-100 flex flex-col items-center pt-3 pb-4">
         {/* 커스텀 신호등 버튼 */}
         {isElectron && (
           <div className="flex gap-2 mb-6" style={{ WebkitAppRegion: 'no-drag' } as any}>
-            <button
-              onClick={handleClose}
-              className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition"
-            />
-            <button
-              onClick={handleMinimize}
-              className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:brightness-90 transition"
-            />
-            <button
-              className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition"
-            />
+            <button onClick={handleClose} className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition" />
+            <button onClick={handleMinimize} className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:brightness-90 transition" />
+            <button className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition" />
           </div>
         )}
         
@@ -236,37 +224,21 @@ export default function MessengerMain() {
       </div>
 
       {/* 메인 영역 */}
-      <div className="flex-1 flex flex-col">
-        {/* 헤더 */}
-        <div 
-          className="px-3 py-2 border-b border-gray-100 flex items-center gap-2"
-          style={{ WebkitAppRegion: 'drag' } as any}
-        >
-          <h1 className="text-sm font-medium text-gray-800">
+      <div className="flex-1 flex flex-col" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        {/* 헤더 - 검색 제거, 텍스트 크게 */}
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h1 className="text-base font-semibold text-gray-800">
             {activeTab === 'chats' ? '채팅' : activeTab === 'members' ? '멤버' : '설정'}
           </h1>
-          {activeTab !== 'settings' && (
-            <>
-              <input
-                type="text"
-                placeholder="검색"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 px-2 py-1 text-xs bg-gray-100 rounded focus:outline-none"
-                style={{ WebkitAppRegion: 'no-drag' } as any}
-              />
-              {activeTab === 'chats' && (
-                <button
-                  onClick={createGroupChat}
-                  className="text-gray-400 hover:text-gray-600 p-1"
-                  style={{ WebkitAppRegion: 'no-drag' } as any}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </button>
-              )}
-            </>
+          {activeTab === 'chats' && (
+            <button
+              onClick={createGroupChat}
+              className="text-gray-400 hover:text-gray-600 p-1"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
           )}
         </div>
 
@@ -296,10 +268,10 @@ export default function MessengerMain() {
               <div className="border-t border-gray-100 my-1" />
 
               {/* 다른 멤버들 */}
-              {filteredMembers.length === 0 ? (
+              {members.length === 0 ? (
                 <p className="text-center text-gray-400 text-xs py-8">다른 멤버가 없습니다</p>
               ) : (
-                filteredMembers.map(member => (
+                members.map(member => (
                   <div
                     key={member.id}
                     onClick={() => startDirectChat(member)}
@@ -324,10 +296,10 @@ export default function MessengerMain() {
           {/* 채팅방 리스트 */}
           {activeTab === 'chats' && (
             <div>
-              {filteredRooms.length === 0 ? (
+              {rooms.length === 0 ? (
                 <p className="text-center text-gray-400 text-xs py-8">채팅방이 없습니다</p>
               ) : (
-                filteredRooms.map(room => (
+                rooms.map(room => (
                   <div
                     key={room.id}
                     onClick={() => openChatWindow(room)}
