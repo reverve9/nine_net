@@ -51,23 +51,18 @@ function createMessengerWindow() {
   messengerWindow = new BrowserWindow({
     width: 360,
     height: 500,
-    x: width - 380,
-    y: height - 520,
-    frame: false,
-    transparent: false,
-    alwaysOnTop: true,
+    x: width - 400,
+    y: 100,
+    movable: true,
     resizable: true,
-    minimizable: false,
-    maximizable: false,
-    skipTaskbar: false,
+    alwaysOnTop: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
     },
     icon: path.join(__dirname, '../public/icon-512.png'),
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 10, y: 10 },
+    title: '팀 채팅',
   });
 
   messengerWindow.loadURL(baseUrl + '/messenger-popup');
@@ -90,8 +85,9 @@ function toggleMessengerWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, '../public/icon-512.png');
-  tray = new Tray(iconPath);
+  const trayIconPath = path.join(__dirname, '../public/tray-iconTemplate.png');
+  
+  tray = new Tray(trayIconPath);
 
   const contextMenu = Menu.buildFromTemplate([
     { label: '메인 창 열기', click: () => mainWindow?.show() },
