@@ -41,7 +41,7 @@ interface BoardPost {
   author?: { name: string }
 }
 
-const renderMessageContent = (content: string, isMe: boolean) => {
+const renderMessageContent = (content: string) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g
   const parts = content.split(urlRegex)
   
@@ -106,9 +106,6 @@ export default function ChatWindow() {
       fetchMembers()
       fetchBoardPosts()
       
-      // 메시지 읽음 처리
-      setTimeout(() => markAsRead(), 500)
-      
       const channel = supabase.channel(`room-${roomId}`)
       
       channel
@@ -138,7 +135,7 @@ export default function ChatWindow() {
               return [...prev, messageWithSender]
             })
             
-            // 새 메시지 읽음 처리
+            // 새 메시지 읽음 처리 (내가 보낸 게 아니면)
             if (newMsg.sender_id !== user.id) {
               markMessageAsRead(newMsg.id)
             }
@@ -167,6 +164,13 @@ export default function ChatWindow() {
   }, [user, roomId])
   
   useEffect(() => { scrollToBottom() }, [messages])
+  
+  // 메시지 로드 후 읽음 처리
+  useEffect(() => {
+    if (user && messages.length > 0 && !room?.is_self) {
+      markAllAsRead()
+    }
+  }, [messages.length, user, room])
 
   const checkAuth = async () => {
     const { data: { session } } = await supabase.auth.getSession()
@@ -215,26 +219,18 @@ export default function ChatWindow() {
     if (data) setBoardPosts(data)
   }
 
-  const markAsRead = async () => {
+  const markAllAsRead = async () => {
     if (!user) return
     
-    // 내가 보내지 않은 모든 메시지 읽음 처리
-    const { data: unreadMessages } = await supabase
-      .from('messages')
-      .select('id, read_by')
-      .eq('room_id', roomId)
-      .neq('sender_id', user.id)
+    // 내가 보내지 않은 + 아직 안 읽은 메시지들
+    const unreadMessages = messages.filter(msg => {
+      if (msg.sender_id === user.id) return false
+      const readBy = msg.read_by || []
+      return !readBy.includes(user.id)
+    })
     
-    if (unreadMessages) {
-      for (const msg of unreadMessages) {
-        const readBy = msg.read_by || []
-        if (!readBy.includes(user.id)) {
-          await supabase
-            .from('messages')
-            .update({ read_by: [...readBy, user.id] })
-            .eq('id', msg.id)
-        }
-      }
+    for (const msg of unreadMessages) {
+      await markMessageAsRead(msg.id)
     }
   }
 
@@ -250,10 +246,14 @@ export default function ChatWindow() {
     if (msg) {
       const readBy = msg.read_by || []
       if (!readBy.includes(user.id)) {
-        await supabase
+        const { error } = await supabase
           .from('messages')
           .update({ read_by: [...readBy, user.id] })
           .eq('id', messageId)
+        
+        if (error) {
+          console.error('읽음 처리 실패:', error)
+        }
       }
     }
   }
@@ -354,7 +354,17 @@ export default function ChatWindow() {
     
     if (!confirm('채팅방을 나가시겠습니까?')) return
     
-    await supabase.from('room_members').delete().eq('room_id', roomId).eq('user_id', user.id)
+    const { error } = await supabase
+      .from('room_members')
+      .delete()
+      .eq('room_id', roomId)
+      .eq('user_id', user.id)
+    
+    if (error) {
+      console.error('나가기 실패:', error)
+      alert('채팅방 나가기에 실패했습니다: ' + error.message)
+      return
+    }
     
     // 창 닫기
     if (window.electronAPI?.isElectron) {
@@ -419,6 +429,7 @@ export default function ChatWindow() {
 
   const getUnreadCount = (msg: Message) => {
     if (msg.sender_id !== user?.id) return 0
+    if (room?.is_self) return 0
     const readBy = msg.read_by || []
     const totalMembers = roomMembers.length
     const readCount = readBy.length
@@ -643,7 +654,7 @@ export default function ChatWindow() {
                             ? 'bg-[#aacbec] text-gray-900 rounded-lg rounded-br-sm' 
                             : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
                         }`}>
-                          {renderMessageContent(msg.content, isMe)}
+                          {renderMessageContent(msg.content)}
                         </div>
                       )}
                     </div>

@@ -96,15 +96,16 @@ export default function MessengerMain() {
   }
 
   const fetchRooms = async () => {
-    // 나와의 채팅방 확인/생성
-    const { data: selfRoom } = await supabase
+    // 나와의 채팅방 확인
+    const { data: existingSelfRoom } = await supabase
       .from('chat_rooms')
-      .select('*')
+      .select('id')
       .eq('is_self', true)
       .eq('created_by', user.id)
       .single()
 
-    if (!selfRoom) {
+    // 없으면 생성
+    if (!existingSelfRoom) {
       const { data: newSelfRoom } = await supabase
         .from('chat_rooms')
         .insert({ name: '나와의 채팅', is_group: false, is_self: true, created_by: user.id })
@@ -147,37 +148,37 @@ export default function MessengerMain() {
             .limit(1)
             .single()
 
-          // 안 읽은 메시지 수
-          const { data: unreadMsgs } = await supabase
-            .from('messages')
-            .select('id, read_by')
-            .eq('room_id', room.id)
-            .neq('sender_id', user.id)
-
+          // 안 읽은 메시지 수 (나와의 채팅은 제외)
           let unreadCount = 0
-          if (unreadMsgs) {
-            unreadCount = unreadMsgs.filter(msg => {
-              const readBy = msg.read_by || []
-              return !readBy.includes(user.id)
-            }).length
+          if (!room.is_self) {
+            const { data: unreadMsgs } = await supabase
+              .from('messages')
+              .select('id, read_by')
+              .eq('room_id', room.id)
+              .neq('sender_id', user.id)
+
+            if (unreadMsgs) {
+              unreadCount = unreadMsgs.filter(msg => {
+                const readBy = msg.read_by || []
+                return !readBy.includes(user.id)
+              }).length
+            }
           }
 
           // 표시 이름 결정
           let displayName = room.name
           
-          // 나와의 채팅
           if (room.is_self) {
             displayName = '나와의 채팅'
-          }
-          // 1:1 채팅
-          else if (!room.is_group) {
-            const { data: roomMembers } = await supabase
+          } else if (!room.is_group) {
+            // 1:1 채팅 - 상대방 이름
+            const { data: roomMembersList } = await supabase
               .from('room_members')
               .select('user_id')
               .eq('room_id', room.id)
             
-            if (roomMembers) {
-              const otherUserId = roomMembers.find(m => m.user_id !== user.id)?.user_id
+            if (roomMembersList) {
+              const otherUserId = roomMembersList.find(m => m.user_id !== user.id)?.user_id
               if (otherUserId) {
                 const { data: otherUser } = await supabase
                   .from('profiles')
@@ -205,13 +206,10 @@ export default function MessengerMain() {
 
       // 정렬: 나와의 채팅 항상 최상단 > 고정 > 최신 메시지 순
       const sortedRooms = roomsWithMessages.sort((a, b) => {
-        // 나와의 채팅 항상 최상단
         if (a.is_self) return -1
         if (b.is_self) return 1
-        // 고정된 채팅방
         if (a.is_pinned && !b.is_pinned) return -1
         if (!a.is_pinned && b.is_pinned) return 1
-        // 최신 메시지 순
         return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime()
       })
 
@@ -348,10 +346,21 @@ export default function MessengerMain() {
       return
     }
     
-    await supabase.from('room_members').delete().eq('room_id', roomId).eq('user_id', user.id)
+    // room_members에서 삭제
+    const { error } = await supabase
+      .from('room_members')
+      .delete()
+      .eq('room_id', roomId)
+      .eq('user_id', user.id)
     
-    // 즉시 리스트에서 제거
-    setRooms(prev => prev.filter(r => r.id !== roomId))
+    if (error) {
+      console.error('나가기 실패:', error)
+      alert('채팅방 나가기에 실패했습니다.')
+    } else {
+      // 즉시 리스트에서 제거
+      setRooms(prev => prev.filter(r => r.id !== roomId))
+    }
+    
     setContextMenu(prev => ({ ...prev, show: false }))
   }
 
@@ -568,10 +577,10 @@ export default function MessengerMain() {
                         {room.last_message || (room.is_self ? '메모' : room.is_group ? '그룹' : '1:1')}
                       </p>
                     </div>
-                    {/* 우측: 시간 + 안읽은 배지 */}
+                    {/* 우측: 시간 + 안읽은 배지 (나와의 채팅 제외) */}
                     <div className="flex flex-col items-end flex-shrink-0">
                       <span className="text-[10px] text-gray-400">{formatTime(room.last_message_time || '')}</span>
-                      {room.unread_count && room.unread_count > 0 && (
+                      {!room.is_self && room.unread_count && room.unread_count > 0 && (
                         <span className="mt-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] rounded-full flex items-center justify-center px-1">
                           {room.unread_count > 99 ? '99+' : room.unread_count}
                         </span>
