@@ -41,7 +41,6 @@ interface BoardPost {
   author?: { name: string }
 }
 
-// URL을 링크로 변환하는 함수
 const renderMessageContent = (content: string, isMe: boolean) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g
   const parts = content.split(urlRegex)
@@ -106,7 +105,9 @@ export default function ChatWindow() {
       fetchMessages()
       fetchMembers()
       fetchBoardPosts()
-      markAsRead()
+      
+      // 메시지 읽음 처리
+      setTimeout(() => markAsRead(), 500)
       
       const channel = supabase.channel(`room-${roomId}`)
       
@@ -215,7 +216,9 @@ export default function ChatWindow() {
   }
 
   const markAsRead = async () => {
-    // 내가 보낸 메시지 제외하고 모두 읽음 처리
+    if (!user) return
+    
+    // 내가 보내지 않은 모든 메시지 읽음 처리
     const { data: unreadMessages } = await supabase
       .from('messages')
       .select('id, read_by')
@@ -236,6 +239,8 @@ export default function ChatWindow() {
   }
 
   const markMessageAsRead = async (messageId: string) => {
+    if (!user) return
+    
     const { data: msg } = await supabase
       .from('messages')
       .select('read_by')
@@ -339,6 +344,24 @@ export default function ChatWindow() {
     })
     const member = allMembers.find(m => m.id === memberId)
     if (member) setRoomMembers(prev => [...prev, member])
+  }
+
+  const handleLeaveRoom = async () => {
+    if (room?.is_self) {
+      alert('나와의 채팅은 나갈 수 없습니다.')
+      return
+    }
+    
+    if (!confirm('채팅방을 나가시겠습니까?')) return
+    
+    await supabase.from('room_members').delete().eq('room_id', roomId).eq('user_id', user.id)
+    
+    // 창 닫기
+    if (window.electronAPI?.isElectron) {
+      window.electronAPI.closeWindow?.()
+    } else {
+      window.close()
+    }
   }
 
   const handleCreatePost = async () => {
@@ -492,14 +515,25 @@ export default function ChatWindow() {
             </button>
             
             {!room?.is_self && (
-              <button
-                onClick={() => setShowInviteModal(true)}
-                className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
-              </button>
+              <>
+                <button
+                  onClick={() => setShowInviteModal(true)}
+                  className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                  </svg>
+                </button>
+                
+                <button
+                  onClick={handleLeaveRoom}
+                  className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-white/10 rounded-full transition"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </>
             )}
           </div>
         </div>
