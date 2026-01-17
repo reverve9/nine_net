@@ -4,7 +4,7 @@ const path = require('path');
 
 let mainWindow;
 let messengerWindow;
-let chatWindows = new Map(); // 여러 채팅창 관리
+let chatWindows = new Map();
 let tray;
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
@@ -51,13 +51,15 @@ function createMessengerWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
 
   messengerWindow = new BrowserWindow({
-    width: 320,
+    width: 300,
     height: 500,
-    x: width - 340,
-    y: 100,
+    x: width - 320,
+    y: 80,
     movable: true,
     resizable: true,
     alwaysOnTop: true,
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -75,7 +77,6 @@ function createMessengerWindow() {
 }
 
 function createChatWindow(roomId, roomName) {
-  // 이미 열린 채팅창이 있으면 포커스
   if (chatWindows.has(roomId)) {
     const existingWindow = chatWindows.get(roomId);
     existingWindow.show();
@@ -84,18 +85,18 @@ function createChatWindow(roomId, roomName) {
   }
 
   const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-  
-  // 창 위치를 약간씩 다르게 (겹치지 않게)
   const offset = chatWindows.size * 30;
 
   const chatWindow = new BrowserWindow({
-    width: 360,
-    height: 500,
-    x: width - 400 - offset,
-    y: 150 + offset,
+    width: 340,
+    height: 480,
+    x: width - 380 - offset,
+    y: 120 + offset,
     movable: true,
     resizable: true,
     alwaysOnTop: true,
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 12, y: 12 },
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -143,7 +144,6 @@ function createTray() {
   tray.on('click', toggleMessengerWindow);
 }
 
-// IPC 통신
 ipcMain.on('toggle-messenger', () => {
   toggleMessengerWindow();
 });
