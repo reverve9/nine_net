@@ -11,6 +11,7 @@ interface Message {
   sender_id: string
   room_id: string
   created_at: string
+  reply_to?: string
   sender?: { name: string }
 }
 
@@ -40,7 +41,7 @@ interface BoardPost {
 }
 
 // URL을 링크로 변환하는 함수
-const renderMessageContent = (content: string) => {
+const renderMessageContent = (content: string, isMe: boolean) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g
   const parts = content.split(urlRegex)
   
@@ -52,7 +53,7 @@ const renderMessageContent = (content: string) => {
           href={part}
           target="_blank"
           rel="noopener noreferrer"
-          className="underline hover:opacity-80"
+          className={`underline hover:opacity-80 ${isMe ? 'text-blue-700' : 'text-blue-500'}`}
           onClick={(e) => e.stopPropagation()}
         >
           {part}
@@ -87,6 +88,9 @@ export default function ChatWindow() {
   const [newPostTitle, setNewPostTitle] = useState('')
   const [newPostContent, setNewPostContent] = useState('')
   const [newPostImportant, setNewPostImportant] = useState(false)
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+  const [showMentionList, setShowMentionList] = useState(false)
+  const [mentionFilter, setMentionFilter] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -196,17 +200,24 @@ export default function ChatWindow() {
   const handleSend = async () => {
     if (!newMessage.trim() || !roomId || !user) return
     
-    const { error } = await supabase.from('messages').insert({
+    const messageData: any = {
       content: newMessage.trim(),
       content_type: 'text',
       sender_id: user.id,
       room_id: roomId,
-    })
+    }
+    
+    if (replyTo) {
+      messageData.reply_to = replyTo.id
+    }
+    
+    const { error } = await supabase.from('messages').insert(messageData)
     
     if (error) {
       alert('메시지 전송에 실패했습니다: ' + error.message)
     } else {
       setNewMessage('')
+      setReplyTo(null)
     }
   }
 
@@ -215,6 +226,36 @@ export default function ChatWindow() {
       e.preventDefault()
       handleSend()
     }
+  }
+
+  const handleMessageChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setNewMessage(value)
+    
+    // @ 멘션 감지
+    const lastAtIndex = value.lastIndexOf('@')
+    if (lastAtIndex !== -1) {
+      const textAfterAt = value.slice(lastAtIndex + 1)
+      const spaceIndex = textAfterAt.indexOf(' ')
+      
+      if (spaceIndex === -1) {
+        setMentionFilter(textAfterAt.toLowerCase())
+        setShowMentionList(true)
+      } else {
+        setShowMentionList(false)
+      }
+    } else {
+      setShowMentionList(false)
+    }
+  }
+
+  const insertMention = (member: Member) => {
+    const lastAtIndex = newMessage.lastIndexOf('@')
+    const beforeAt = newMessage.slice(0, lastAtIndex)
+    const memberName = member.name || member.email?.split('@')[0]
+    setNewMessage(`${beforeAt}@${memberName} `)
+    setShowMentionList(false)
+    textareaRef.current?.focus()
   }
 
   const handleSendFile = async () => {
@@ -288,6 +329,10 @@ export default function ChatWindow() {
     return new Date(dateString).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
   }
 
+  const getReplyMessage = (replyToId: string) => {
+    return messages.find(m => m.id === replyToId)
+  }
+
   const filteredMessages = searchQuery 
     ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
     : messages
@@ -296,7 +341,13 @@ export default function ChatWindow() {
     m.id !== user?.id && !roomMembers.some(rm => rm.id === m.id)
   )
 
-  const memberCount = roomMembers.length + 1
+  const filteredMentionMembers = roomMembers.filter(m => {
+    const name = (m.name || m.email?.split('@')[0] || '').toLowerCase()
+    return name.includes(mentionFilter)
+  })
+
+  // 멤버 수 계산 (중복 제거)
+  const memberCount = roomMembers.length
 
   if (loading) {
     return (
@@ -335,8 +386,10 @@ export default function ChatWindow() {
         </div>
         
         <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
-          <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-base flex-shrink-0">
-            {room?.is_self ? '📝' : room?.is_group ? '👥' : '👤'}
+          <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center flex-shrink-0">
+            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
           </div>
           
           <div className="flex-1 min-w-0">
@@ -351,32 +404,32 @@ export default function ChatWindow() {
             )}
           </div>
           
-          <div className="flex items-center gap-0.5 flex-shrink-0">
+          <div className="flex items-center gap-1 flex-shrink-0">
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
+              className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </button>
             
             <button
               onClick={() => setShowBoardModal(true)}
-              className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
+              className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </button>
             
             {!room?.is_self && (
               <button
                 onClick={() => setShowInviteModal(true)}
-                className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
+                className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                 </svg>
               </button>
             )}
@@ -399,50 +452,105 @@ export default function ChatWindow() {
       )}
 
       {/* 메시지 목록 */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {filteredMessages.length === 0 ? (
           <p className="text-center text-gray-400 text-xs mt-8">
             {searchQuery ? '검색 결과가 없습니다' : room?.is_self ? '메모를 작성해보세요 ✏️' : '첫 메시지를 보내보세요 👋'}
           </p>
         ) : (
-          filteredMessages.map((msg) => {
+          filteredMessages.map((msg, index) => {
             const isMe = msg.sender_id === user.id
             const isFile = msg.content_type === 'file'
+            const replyMsg = msg.reply_to ? getReplyMessage(msg.reply_to) : null
+            
+            // 이전 메시지와 같은 사람인지 확인 (연속 메시지)
+            const prevMsg = index > 0 ? filteredMessages[index - 1] : null
+            const isSameSender = prevMsg && prevMsg.sender_id === msg.sender_id
+            const showProfile = !isMe && !room?.is_self && !isSameSender
             
             return (
-              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
-                <div className="max-w-[75%]">
-                  {!isMe && !room?.is_self && (
-                    <p className="text-xs text-gray-400 mb-0.5 ml-1">{msg.sender?.name || '알 수 없음'}</p>
-                  )}
-                  <div className="flex items-end gap-1">
-                    {isMe && <p className="text-xs text-gray-400 mb-0.5">{formatTime(msg.created_at)}</p>}
-                    
-                    {isFile ? (
-                      <button
-                        onClick={() => openFilePath(msg.content)}
-                        className={`px-3 py-2 text-sm flex items-center gap-2 ${
-                          isMe 
-                            ? 'bg-[#5b9bd5] text-white rounded-lg rounded-br-sm' 
-                            : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
-                        }`}
-                      >
-                        <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group`}>
+                {/* 상대방 프로필 */}
+                {!isMe && !room?.is_self && (
+                  <div className="w-9 flex-shrink-0 mr-2">
+                    {showProfile && (
+                      <div className="w-9 h-9 bg-gray-300 rounded-full flex items-center justify-center">
+                        <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                         </svg>
-                        <span className="underline break-all">{msg.content.split(/[/\\]/).pop() || msg.content}</span>
-                      </button>
-                    ) : (
-                      <div className={`px-3 py-2 text-sm whitespace-pre-wrap break-all ${
-                        isMe 
-                          ? 'bg-[#5b9bd5] text-white rounded-lg rounded-br-sm' 
-                          : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
-                      }`}>
-                        {renderMessageContent(msg.content)}
                       </div>
                     )}
+                  </div>
+                )}
+                
+                <div className="max-w-[70%]">
+                  {/* 상대방 이름 */}
+                  {showProfile && (
+                    <p className="text-xs text-gray-300 mb-1">{msg.sender?.name || '알 수 없음'}</p>
+                  )}
+                  
+                  <div className="flex items-end gap-1">
+                    {/* 답장 버튼 (내 메시지) */}
+                    {isMe && (
+                      <button
+                        onClick={() => setReplyTo(msg)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-white transition"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                        </svg>
+                      </button>
+                    )}
+                    
+                    {isMe && <p className="text-xs text-gray-400 mb-0.5">{formatTime(msg.created_at)}</p>}
+                    
+                    <div>
+                      {/* 답장 표시 */}
+                      {replyMsg && (
+                        <div className={`text-xs px-2 py-1 mb-1 rounded ${isMe ? 'bg-blue-200 text-blue-800' : 'bg-gray-200 text-gray-600'}`}>
+                          <span className="font-medium">{replyMsg.sender?.name || '알 수 없음'}</span>에게 답장
+                          <p className="truncate">{replyMsg.content}</p>
+                        </div>
+                      )}
+                      
+                      {isFile ? (
+                        <button
+                          onClick={() => openFilePath(msg.content)}
+                          className={`px-3 py-2 text-sm flex items-center gap-2 ${
+                            isMe 
+                              ? 'bg-[#d4e5f7] text-gray-900 rounded-lg rounded-br-sm' 
+                              : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
+                          }`}
+                        >
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                          </svg>
+                          <span className="underline break-all">{msg.content.split(/[/\\]/).pop() || msg.content}</span>
+                        </button>
+                      ) : (
+                        <div className={`px-3 py-2 text-sm whitespace-pre-wrap break-all ${
+                          isMe 
+                            ? 'bg-[#d4e5f7] text-gray-900 rounded-lg rounded-br-sm' 
+                            : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
+                        }`}>
+                          {renderMessageContent(msg.content, isMe)}
+                        </div>
+                      )}
+                    </div>
                     
                     {!isMe && <p className="text-xs text-gray-400 mb-0.5">{formatTime(msg.created_at)}</p>}
+                    
+                    {/* 답장 버튼 (상대방 메시지) */}
+                    {!isMe && (
+                      <button
+                        onClick={() => setReplyTo(msg)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-white transition"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -452,14 +560,47 @@ export default function ChatWindow() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* 답장 표시 */}
+      {replyTo && (
+        <div className="px-3 py-2 bg-[#3a3a3a] flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-blue-400">{replyTo.sender?.name || '알 수 없음'}에게 답장</p>
+            <p className="text-xs text-gray-400 truncate">{replyTo.content}</p>
+          </div>
+          <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-white ml-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+
+      {/* 멘션 리스트 */}
+      {showMentionList && filteredMentionMembers.length > 0 && (
+        <div className="px-3 py-2 bg-[#3a3a3a] border-t border-gray-600">
+          <p className="text-xs text-gray-400 mb-1">멤버 선택</p>
+          <div className="flex flex-wrap gap-1">
+            {filteredMentionMembers.map(member => (
+              <button
+                key={member.id}
+                onClick={() => insertMention(member)}
+                className="px-2 py-1 text-xs bg-white/10 text-white rounded hover:bg-white/20"
+              >
+                @{member.name || member.email?.split('@')[0]}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 입력창 */}
       <div className="bg-white flex-shrink-0">
         <textarea
           ref={textareaRef}
           value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
+          onChange={handleMessageChange}
           onKeyDown={handleKeyDown}
-          placeholder={room?.is_self ? '메모 입력...' : '메시지 입력...'}
+          placeholder={room?.is_self ? '메모 입력...' : '메시지 입력... (@로 멘션)'}
           className="w-full px-3 py-2 text-sm bg-white focus:outline-none resize-none border-0"
           style={{ height: '80px' }}
         />
@@ -469,8 +610,8 @@ export default function ChatWindow() {
             onClick={() => setShowFileModal(true)}
             className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded transition"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
             </svg>
           </button>
           
@@ -483,8 +624,8 @@ export default function ChatWindow() {
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
             </svg>
           </button>
         </div>
@@ -540,8 +681,8 @@ export default function ChatWindow() {
                             onClick={() => handleDeletePost(post.id)}
                             className="p-1 text-gray-400 hover:text-red-500"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
                           </button>
                         </div>
@@ -627,15 +768,17 @@ export default function ChatWindow() {
             </div>
             
             <div className="space-y-1 max-h-52 overflow-y-auto">
-              <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm">👤</div>
-                <p className="text-sm text-gray-800">나</p>
-              </div>
-              
               {roomMembers.map(member => (
-                <div key={member.id} className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg">
-                  <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm">👤</div>
-                  <p className="text-sm text-gray-800">{member.name || member.email?.split('@')[0]}</p>
+                <div key={member.id} className={`flex items-center gap-2 p-2 rounded-lg ${member.id === user.id ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${member.id === user.id ? 'bg-blue-100' : 'bg-gray-200'}`}>
+                    <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                  </div>
+                  <p className="text-sm text-gray-800">
+                    {member.name || member.email?.split('@')[0]}
+                    {member.id === user.id && ' (나)'}
+                  </p>
                 </div>
               ))}
             </div>
@@ -666,7 +809,11 @@ export default function ChatWindow() {
                     onClick={() => handleInviteMember(member.id)}
                     className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
                   >
-                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm">👤</div>
+                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm">
+                      <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                      </svg>
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-800 truncate">{member.name || member.email?.split('@')[0]}</p>
                     </div>
