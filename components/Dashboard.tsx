@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import Sidebar from './Sidebar'
+import FloatingChat from './FloatingChat'
 import HomePage from './pages/HomePage'
-import MessengerPage from './pages/MessengerPage'
 import BoardPage from './pages/BoardPage'
 import SchedulePage from './pages/SchedulePage'
 import SettingsPage from './pages/SettingsPage'
 
-type PageType = 'home' | 'messenger' | 'board' | 'schedule' | 'settings'
+type PageType = 'home' | 'board' | 'schedule' | 'settings'
 
 interface DashboardProps {
   user: any
@@ -21,7 +21,6 @@ export default function Dashboard({ user }: DashboardProps) {
   const [profile, setProfile] = useState<any>(null)
 
   useEffect(() => {
-    // 사용자 프로필 가져오기
     const fetchProfile = async () => {
       const { data } = await supabase
         .from('profiles')
@@ -45,8 +44,6 @@ export default function Dashboard({ user }: DashboardProps) {
     switch (currentPage) {
       case 'home':
         return <HomePage user={user} profile={profile} setCurrentPage={setCurrentPage} />
-      case 'messenger':
-        return <MessengerPage user={user} />
       case 'board':
         return <BoardPage user={user} />
       case 'schedule':
@@ -73,6 +70,9 @@ export default function Dashboard({ user }: DashboardProps) {
       <main className="flex-1 overflow-auto">
         {renderPage()}
       </main>
+
+      {/* 플로팅 채팅 */}
+      <FloatingChat user={user} />
     </div>
   )
 }

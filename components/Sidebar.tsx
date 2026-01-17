@@ -1,6 +1,6 @@
 'use client'
 
-type PageType = 'home' | 'messenger' | 'board' | 'schedule' | 'settings'
+type PageType = 'home' | 'board' | 'schedule' | 'settings'
 
 interface SidebarProps {
   currentPage: PageType
@@ -14,7 +14,6 @@ interface SidebarProps {
 
 const menuItems: { id: PageType; icon: string; label: string }[] = [
   { id: 'home', icon: '🏠', label: '홈' },
-  { id: 'messenger', icon: '💬', label: '메신저' },
   { id: 'board', icon: '📋', label: '게시판' },
   { id: 'schedule', icon: '📅', label: '일정' },
   { id: 'settings', icon: '⚙️', label: '설정' },

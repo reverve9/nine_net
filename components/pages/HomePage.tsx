@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
-type PageType = 'home' | 'messenger' | 'board' | 'schedule' | 'settings'
+type PageType = 'home' | 'board' | 'schedule' | 'settings'
 
 interface HomePageProps {
   user: any
@@ -78,7 +78,6 @@ export default function HomePage({ user, profile, setCurrentPage }: HomePageProp
   }
 
   const quickAccess = [
-    { id: 'messenger' as PageType, icon: '💬', label: '메신저' },
     { id: 'board' as PageType, icon: '📋', label: '게시판' },
     { id: 'schedule' as PageType, icon: '📅', label: '일정' },
   ]
