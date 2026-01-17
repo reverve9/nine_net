@@ -300,16 +300,16 @@ export default function ChatWindow() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-white">
-        <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+      <div className="h-screen flex items-center justify-center bg-[#494949]">
+        <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
       </div>
     )
   }
 
   if (!user) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-white p-4">
-        <p className="text-gray-500 text-xs">로그인이 필요합니다</p>
+      <div className="h-screen flex flex-col items-center justify-center bg-[#494949] p-4">
+        <p className="text-gray-300 text-xs">로그인이 필요합니다</p>
       </div>
     )
   }
@@ -317,15 +317,15 @@ export default function ChatWindow() {
   const roomName = room?.is_self ? '나와의 채팅' : room?.name || '채팅'
 
   return (
-    <div className="h-screen flex flex-col bg-[#b4c7d6] overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#494949] overflow-hidden">
       {/* 헤더 */}
       <div 
-        className="bg-[#b4c7d6] flex-shrink-0 px-3 py-2"
+        className="bg-[#494949] flex-shrink-0 px-3 py-2"
         style={{ WebkitAppRegion: 'drag' } as any}
       >
-        <div className="flex items-center justify-between mb-2 min-h-[20px]">
+        <div className="flex items-center justify-between mb-1 min-h-[16px]">
           {isElectron && (
-            <div className="flex gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
+            <div className="flex gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as any}>
               <button onClick={handleClose} className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition" />
               <button onClick={handleMinimize} className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:brightness-90 transition" />
               <button className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition" />
@@ -334,38 +334,38 @@ export default function ChatWindow() {
           <div className="flex-1" />
         </div>
         
-        <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
-          <div className="w-10 h-10 bg-white/50 rounded-full flex items-center justify-center text-lg flex-shrink-0">
+        <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center text-base flex-shrink-0">
             {room?.is_self ? '📝' : room?.is_group ? '👥' : '👤'}
           </div>
           
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-800 truncate">{roomName}</p>
+            <p className="text-sm font-medium text-white truncate">{roomName}</p>
             {!room?.is_self && (
               <button 
                 onClick={() => setShowMembersModal(true)}
-                className="text-xs text-gray-600 hover:underline"
+                className="text-xs text-gray-300 hover:text-white"
               >
                 {memberCount}명
               </button>
             )}
           </div>
           
-          <div className="flex items-center gap-1 flex-shrink-0">
+          <div className="flex items-center gap-0.5 flex-shrink-0">
             <button
               onClick={() => setShowSearch(!showSearch)}
-              className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-black/10 rounded-full transition"
+              className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </button>
             
             <button
               onClick={() => setShowBoardModal(true)}
-              className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-black/10 rounded-full transition"
+              className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
             </button>
@@ -373,9 +373,9 @@ export default function ChatWindow() {
             {!room?.is_self && (
               <button
                 onClick={() => setShowInviteModal(true)}
-                className="w-8 h-8 flex items-center justify-center text-gray-600 hover:bg-black/10 rounded-full transition"
+                className="w-7 h-7 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                 </svg>
               </button>
@@ -386,13 +386,13 @@ export default function ChatWindow() {
 
       {/* 검색창 */}
       {showSearch && (
-        <div className="px-3 py-2 bg-[#b4c7d6] flex-shrink-0">
+        <div className="px-3 py-2 bg-[#494949] flex-shrink-0">
           <input
             type="text"
             placeholder="대화 내용 검색..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-white rounded-lg focus:outline-none"
+            className="w-full px-3 py-2 text-sm bg-white/10 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:ring-1 focus:ring-white/30"
             autoFocus
           />
         </div>
@@ -401,7 +401,7 @@ export default function ChatWindow() {
       {/* 메시지 목록 */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {filteredMessages.length === 0 ? (
-          <p className="text-center text-gray-600 text-xs mt-8">
+          <p className="text-center text-gray-400 text-xs mt-8">
             {searchQuery ? '검색 결과가 없습니다' : room?.is_self ? '메모를 작성해보세요 ✏️' : '첫 메시지를 보내보세요 👋'}
           </p>
         ) : (
@@ -413,10 +413,10 @@ export default function ChatWindow() {
               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <div className="max-w-[75%]">
                   {!isMe && !room?.is_self && (
-                    <p className="text-xs text-gray-600 mb-0.5 ml-1">{msg.sender?.name || '알 수 없음'}</p>
+                    <p className="text-xs text-gray-400 mb-0.5 ml-1">{msg.sender?.name || '알 수 없음'}</p>
                   )}
                   <div className="flex items-end gap-1">
-                    {isMe && <p className="text-xs text-gray-500 mb-0.5">{formatTime(msg.created_at)}</p>}
+                    {isMe && <p className="text-xs text-gray-400 mb-0.5">{formatTime(msg.created_at)}</p>}
                     
                     {isFile ? (
                       <button
@@ -442,7 +442,7 @@ export default function ChatWindow() {
                       </div>
                     )}
                     
-                    {!isMe && <p className="text-xs text-gray-500 mb-0.5">{formatTime(msg.created_at)}</p>}
+                    {!isMe && <p className="text-xs text-gray-400 mb-0.5">{formatTime(msg.created_at)}</p>}
                   </div>
                 </div>
               </div>
