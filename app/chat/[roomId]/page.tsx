@@ -19,6 +19,7 @@ interface ChatRoom {
   name: string
   is_group: boolean
   is_self?: boolean
+  created_by?: string
 }
 
 interface Member {
@@ -33,6 +34,7 @@ interface BoardPost {
   content: string
   author_id: string
   room_id: string
+  is_important: boolean
   created_at: string
   author?: { name: string }
 }
@@ -60,6 +62,7 @@ export default function ChatWindow() {
   const [boardPosts, setBoardPosts] = useState<BoardPost[]>([])
   const [newPostTitle, setNewPostTitle] = useState('')
   const [newPostContent, setNewPostContent] = useState('')
+  const [newPostImportant, setNewPostImportant] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -67,16 +70,40 @@ export default function ChatWindow() {
     checkAuth()
     setIsElectron(!!window.electronAPI?.isElectron)
   }, [])
+  
   useEffect(() => { 
     if (user && roomId) { 
       fetchRoom()
       fetchMessages()
       fetchMembers()
       fetchBoardPosts()
-      const unsub = subscribeToMessages()
-      return unsub
+      
+      // 실시간 구독
+      const channel = supabase
+        .channel(`chat-${roomId}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `room_id=eq.${roomId}`,
+        }, async (payload) => {
+          const { data: sender } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', payload.new.sender_id)
+            .single()
+          
+          const newMsg = { ...payload.new, sender } as Message
+          setMessages(prev => [...prev, newMsg])
+        })
+        .subscribe()
+      
+      return () => {
+        supabase.removeChannel(channel)
+      }
     }
   }, [user, roomId])
+  
   useEffect(() => { scrollToBottom() }, [messages])
 
   const checkAuth = async () => {
@@ -120,25 +147,9 @@ export default function ChatWindow() {
       .from('board_posts')
       .select('*, author:profiles!author_id(name)')
       .eq('room_id', roomId)
+      .order('is_important', { ascending: false })
       .order('created_at', { ascending: false })
     if (data) setBoardPosts(data)
-  }
-
-  const subscribeToMessages = () => {
-    const subscription = supabase
-      .channel(`chat-room:${roomId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages',
-        filter: `room_id=eq.${roomId}`,
-      }, async (payload) => {
-        const { data: sender } = await supabase.from('profiles').select('name').eq('id', payload.new.sender_id).single()
-        const newMsg = { ...payload.new, sender } as Message
-        setMessages((prev) => [...prev, newMsg])
-      })
-      .subscribe()
-    return () => { subscription.unsubscribe() }
   }
 
   const scrollToBottom = () => {
@@ -157,7 +168,7 @@ export default function ChatWindow() {
     
     if (error) {
       console.error('메시지 전송 오류:', error)
-      alert('메시지 전송에 실패했습니다.')
+      alert('메시지 전송에 실패했습니다: ' + error.message)
     } else {
       setNewMessage('')
     }
@@ -200,11 +211,18 @@ export default function ChatWindow() {
       content: newPostContent.trim(),
       author_id: user.id,
       room_id: roomId,
+      is_important: newPostImportant,
     })
     
     setNewPostTitle('')
     setNewPostContent('')
+    setNewPostImportant(false)
     setShowNewPostModal(false)
+    fetchBoardPosts()
+  }
+
+  const handleToggleImportant = async (postId: string, currentValue: boolean) => {
+    await supabase.from('board_posts').update({ is_important: !currentValue }).eq('id', postId)
     fetchBoardPosts()
   }
 
@@ -264,24 +282,25 @@ export default function ChatWindow() {
 
   return (
     <div className="h-screen flex flex-col bg-[#9bbbd4] overflow-hidden">
-      {/* 헤더 - 전체가 드래그 영역 */}
+      {/* 헤더 전체가 드래그 영역 */}
       <div 
-        className="bg-[#9bbbd4] flex-shrink-0"
+        className="bg-[#9bbbd4] flex-shrink-0 px-3 py-2"
         style={{ WebkitAppRegion: 'drag' } as any}
       >
-        {/* 신호등 버튼 */}
-        <div className="px-3 pt-2">
+        {/* 상단 영역 - 신호등 + 빈 공간 (드래그용) */}
+        <div className="flex items-center justify-between mb-2 min-h-[20px]">
           {isElectron && (
-            <div className="flex gap-2 mb-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
+            <div className="flex gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
               <button onClick={handleClose} className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition" />
               <button onClick={handleMinimize} className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:brightness-90 transition" />
               <button className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition" />
             </div>
           )}
+          <div className="flex-1" />
         </div>
         
         {/* 프로필 + 버튼들 */}
-        <div className="px-3 pb-3 flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="flex items-center gap-3" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <div className="w-10 h-10 bg-white/50 rounded-full flex items-center justify-center text-lg flex-shrink-0">
             {room?.is_self ? '📝' : room?.is_group ? '👥' : '👤'}
           </div>
@@ -411,7 +430,6 @@ export default function ChatWindow() {
           style={{ height: '80px' }}
         />
         
-        {/* 하단 툴바 */}
         <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
           <button
             onClick={() => setShowFileModal(true)}
@@ -438,12 +456,12 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* 게시판 모달 */}
+      {/* 게시판 모달 - 메신저 밖에서도 열림 */}
       {showBoardModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowBoardModal(false)}>
-          <div className="bg-white rounded-xl w-80 max-h-[70vh] shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b">
-              <p className="font-medium text-gray-800">게시판</p>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" onClick={() => setShowBoardModal(false)}>
+          <div className="bg-white rounded-xl w-96 max-h-[80vh] shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
+              <p className="font-medium text-gray-800">📋 게시판</p>
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => setShowNewPostModal(true)}
@@ -451,7 +469,7 @@ export default function ChatWindow() {
                 >
                   글쓰기
                 </button>
-                <button onClick={() => setShowBoardModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+                <button onClick={() => setShowBoardModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
               </div>
             </div>
             
@@ -460,24 +478,36 @@ export default function ChatWindow() {
                 <p className="text-center text-gray-400 text-sm py-8">게시글이 없습니다</p>
               ) : (
                 boardPosts.map(post => (
-                  <div key={post.id} className="p-3 border-b hover:bg-gray-50">
-                    <div className="flex items-start justify-between">
+                  <div key={post.id} className={`p-3 border-b hover:bg-gray-50 ${post.is_important ? 'bg-yellow-50' : ''}`}>
+                    <div className="flex items-start gap-2">
+                      {post.is_important && (
+                        <span className="text-yellow-500 text-sm flex-shrink-0">📌</span>
+                      )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">{post.title}</p>
-                        <p className="text-xs text-gray-500 truncate mt-0.5">{post.content}</p>
+                        <p className="text-sm font-medium text-gray-800">{post.title}</p>
+                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{post.content}</p>
                         <p className="text-xs text-gray-400 mt-1">
                           {post.author?.name || '알 수 없음'} · {formatDate(post.created_at)}
                         </p>
                       </div>
                       {post.author_id === user.id && (
-                        <button
-                          onClick={() => handleDeletePost(post.id)}
-                          className="text-gray-400 hover:text-red-500 p-1"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => handleToggleImportant(post.id, post.is_important)}
+                            className={`p-1 rounded ${post.is_important ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'}`}
+                            title={post.is_important ? '중요 해제' : '중요 표시'}
+                          >
+                            📌
+                          </button>
+                          <button
+                            onClick={() => handleDeletePost(post.id)}
+                            className="p-1 text-gray-400 hover:text-red-500"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -490,7 +520,7 @@ export default function ChatWindow() {
 
       {/* 새 게시글 작성 모달 */}
       {showNewPostModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowNewPostModal(false)}>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[10000]" onClick={() => setShowNewPostModal(false)}>
           <div className="bg-white rounded-xl p-4 w-80 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">새 게시글</p>
@@ -509,9 +539,19 @@ export default function ChatWindow() {
               value={newPostContent}
               onChange={(e) => setNewPostContent(e.target.value)}
               placeholder="내용"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-3 resize-none"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 resize-none"
               rows={4}
             />
+            
+            <label className="flex items-center gap-2 mb-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={newPostImportant}
+                onChange={(e) => setNewPostImportant(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">📌 중요 글로 등록</span>
+            </label>
             
             <div className="flex gap-2">
               <button
@@ -534,7 +574,7 @@ export default function ChatWindow() {
 
       {/* 멤버 목록 모달 */}
       {showMembersModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowMembersModal(false)}>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" onClick={() => setShowMembersModal(false)}>
           <div className="bg-white rounded-xl p-4 w-64 max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">참여 멤버 ({memberCount})</p>
@@ -560,7 +600,7 @@ export default function ChatWindow() {
 
       {/* 멤버 초대 모달 */}
       {showInviteModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowInviteModal(false)}>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" onClick={() => setShowInviteModal(false)}>
           <div className="bg-white rounded-xl p-4 w-64 max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">멤버 초대</p>
@@ -592,7 +632,7 @@ export default function ChatWindow() {
 
       {/* 파일 경로 입력 모달 */}
       {showFileModal && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowFileModal(false)}>
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-[9999]" onClick={() => setShowFileModal(false)}>
           <div className="bg-white rounded-xl p-4 w-72 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">파일 경로 공유</p>
