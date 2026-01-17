@@ -7,6 +7,8 @@ declare global {
       toggleMessenger: () => void
       openChat: (roomId: string, roomName: string) => void
       closeChat: (roomId: string) => void
+      closeWindow: () => void
+      minimizeWindow: () => void
     }
   }
 }

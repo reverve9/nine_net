@@ -31,8 +31,12 @@ export default function MessengerMain() {
   const [notificationEnabled, setNotificationEnabled] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showProfileModal, setShowProfileModal] = useState(false)
+  const [isElectron, setIsElectron] = useState(false)
 
-  useEffect(() => { checkAuth() }, [])
+  useEffect(() => { 
+    checkAuth()
+    setIsElectron(!!window.electronAPI?.isElectron)
+  }, [])
   useEffect(() => { if (user) { fetchProfile(); fetchRooms(); fetchMembers() } }, [user])
 
   const checkAuth = async () => {
@@ -87,6 +91,7 @@ export default function MessengerMain() {
   const openSelfChat = async () => {
     const selfRoom = rooms.find(r => r.is_self)
     if (selfRoom) openChatWindow(selfRoom)
+    setShowProfileModal(false)
   }
 
   const startDirectChat = async (member: Member) => {
@@ -129,6 +134,18 @@ export default function MessengerMain() {
     setShowProfileModal(false)
   }
 
+  const handleClose = () => {
+    if (window.electronAPI?.closeWindow) {
+      window.electronAPI.closeWindow()
+    }
+  }
+
+  const handleMinimize = () => {
+    if (window.electronAPI?.minimizeWindow) {
+      window.electronAPI.minimizeWindow()
+    }
+  }
+
   const StatusDot = ({ status, size = 'sm' }: { status: string, size?: 'sm' | 'md' }) => {
     const colors: Record<string, string> = { online: 'bg-green-500', away: 'bg-yellow-500', offline: 'bg-gray-400' }
     const sizeClass = size === 'md' ? 'w-2.5 h-2.5' : 'w-2 h-2'
@@ -140,7 +157,7 @@ export default function MessengerMain() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-white">
+      <div className="h-screen flex items-center justify-center bg-white rounded-xl">
         <div className="animate-spin w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
       </div>
     )
@@ -148,23 +165,38 @@ export default function MessengerMain() {
 
   if (!user) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-white p-4">
+      <div className="h-screen flex flex-col items-center justify-center bg-white rounded-xl p-4">
         <p className="text-gray-500 text-xs">메인 앱에서 로그인해주세요</p>
       </div>
     )
   }
 
   return (
-    <div className="h-screen flex bg-white">
-      {/* 사이드바 - 최소화 */}
+    <div className="h-screen flex bg-white rounded-xl overflow-hidden">
+      {/* 사이드바 */}
       <div 
-        className="w-[52px] bg-gray-100 flex flex-col items-center pt-8 pb-3"
+        className="w-[52px] bg-gray-100 flex flex-col items-center py-2"
         style={{ WebkitAppRegion: 'drag' } as any}
       >
-        {/* 신호등 버튼 공간 확보 (pt-8) */}
+        {/* 커스텀 신호등 버튼 */}
+        {isElectron && (
+          <div className="flex gap-1.5 mb-4 mt-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
+            <button
+              onClick={handleClose}
+              className="w-3 h-3 rounded-full bg-[#ff5f57] hover:bg-[#ff3b30] transition"
+            />
+            <button
+              onClick={handleMinimize}
+              className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:bg-[#ff9500] transition"
+            />
+            <button
+              className="w-3 h-3 rounded-full bg-[#28c840] hover:bg-[#28a745] transition"
+            />
+          </div>
+        )}
         
         {/* 탭 아이콘 */}
-        <div className="flex flex-col items-center gap-1 mt-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
+        <div className="flex flex-col items-center gap-1" style={{ WebkitAppRegion: 'no-drag' } as any}>
           <button
             onClick={() => setActiveTab('members')}
             className={`w-10 h-10 flex items-center justify-center transition ${
@@ -197,7 +229,7 @@ export default function MessengerMain() {
           }`}
           style={{ WebkitAppRegion: 'no-drag' } as any}
         >
-          <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
             <path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
           </svg>
         </button>
@@ -210,7 +242,7 @@ export default function MessengerMain() {
           className="px-3 py-2 border-b border-gray-100 flex items-center gap-2"
           style={{ WebkitAppRegion: 'drag' } as any}
         >
-          <h1 className="text-sm font-semibold text-gray-800">
+          <h1 className="text-sm font-medium text-gray-800">
             {activeTab === 'chats' ? '채팅' : activeTab === 'members' ? '멤버' : '설정'}
           </h1>
           {activeTab !== 'settings' && (
@@ -343,10 +375,10 @@ export default function MessengerMain() {
       {/* 프로필/상태 변경 모달 */}
       {showProfileModal && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowProfileModal(false)}>
-          <div className="bg-white rounded-xl p-4 w-56 shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="flex flex-col items-center mb-4">
-              <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-2xl mb-2">👤</div>
-              <p className="font-medium text-gray-800">{profile?.name || user.email?.split('@')[0]}</p>
+          <div className="bg-white rounded-xl p-4 w-52 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex flex-col items-center mb-3">
+              <div className="w-14 h-14 bg-blue-100 rounded-full flex items-center justify-center text-2xl mb-2">👤</div>
+              <p className="font-medium text-gray-800 text-sm">{profile?.name || user.email?.split('@')[0]}</p>
               <p className="text-xs text-gray-400">{user.email}</p>
             </div>
             
@@ -356,7 +388,7 @@ export default function MessengerMain() {
                 <button
                   key={status}
                   onClick={() => updateUserStatus(status)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm rounded-lg ${
+                  className={`w-full flex items-center gap-2 px-3 py-2 text-xs rounded-lg ${
                     profile?.status === status ? 'bg-blue-50 text-blue-600' : 'hover:bg-gray-50 text-gray-700'
                   }`}
                 >
@@ -370,7 +402,7 @@ export default function MessengerMain() {
             <div className="border-t border-gray-100 mt-3 pt-3">
               <button
                 onClick={openSelfChat}
-                className="w-full text-sm text-gray-600 hover:text-gray-800 py-1"
+                className="w-full text-xs text-gray-600 hover:text-gray-800 py-1"
               >
                 나와의 채팅
               </button>

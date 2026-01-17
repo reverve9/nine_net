@@ -58,8 +58,9 @@ function createMessengerWindow() {
     movable: true,
     resizable: true,
     alwaysOnTop: true,
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 12, y: 12 },
+    frame: false,
+    transparent: false,
+    vibrancy: 'sidebar',
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -95,8 +96,8 @@ function createChatWindow(roomId, roomName) {
     movable: true,
     resizable: true,
     alwaysOnTop: true,
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 12, y: 12 },
+    frame: false,
+    transparent: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -156,6 +157,18 @@ ipcMain.on('close-chat', (event, roomId) => {
   if (chatWindows.has(roomId)) {
     chatWindows.get(roomId).close();
   }
+});
+
+// 창 닫기 요청
+ipcMain.on('close-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.close();
+});
+
+// 창 최소화 요청
+ipcMain.on('minimize-window', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.minimize();
 });
 
 autoUpdater.on('update-available', () => {

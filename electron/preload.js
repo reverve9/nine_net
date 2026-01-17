@@ -5,4 +5,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleMessenger: () => ipcRenderer.send('toggle-messenger'),
   openChat: (roomId, roomName) => ipcRenderer.send('open-chat', { roomId, roomName }),
   closeChat: (roomId) => ipcRenderer.send('close-chat', roomId),
+  closeWindow: () => ipcRenderer.send('close-window'),
+  minimizeWindow: () => ipcRenderer.send('minimize-window'),
 });
