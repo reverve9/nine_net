@@ -41,7 +41,10 @@ export default function Home() {
     // 인증 상태 변화 감지
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        if (session?.user) {
+        if (_event === 'SIGNED_IN' && session?.user) {
+          // 로그인 시 로딩 상태로 전환
+          setLoading(true)
+          
           const { data: profile } = await supabase
             .from('profiles')
             .select('approval_status')
@@ -56,7 +59,9 @@ export default function Home() {
             setApprovalStatus(null)
             setUser(session.user)
           }
-        } else {
+          
+          setLoading(false)
+        } else if (_event === 'SIGNED_OUT') {
           setUser(null)
         }
       }
