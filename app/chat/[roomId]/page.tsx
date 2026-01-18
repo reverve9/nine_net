@@ -7,7 +7,7 @@ import { useParams } from 'next/navigation'
 interface Message {
   id: string
   content: string
-  content_type?: 'text' | 'file'
+  content_type?: 'text' | 'file' | 'system'
   sender_id: string
   room_id: string
   created_at: string
