@@ -3,13 +3,17 @@
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
-export default function LoginPage() {
+interface LoginPageProps {
+  initialMessage?: string
+}
+
+export default function LoginPage({ initialMessage }: LoginPageProps) {
   const [isLogin, setIsLogin] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(initialMessage || '')
   const [message, setMessage] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {

@@ -38,14 +38,18 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
   }
 
   const updateUserStatus = async (userId: string, status: 'approved' | 'rejected') => {
+    console.log('updateUserStatus called:', userId, status)
+    
     const { error } = await supabase
       .from('profiles')
       .update({ approval_status: status })
       .eq('id', userId)
     
     if (error) {
+      console.error('Update error:', error)
       alert('상태 변경 실패: ' + error.message)
     } else {
+      console.log('Update success')
       fetchUsers()
     }
   }
