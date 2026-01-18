@@ -625,13 +625,24 @@ export default function ChatWindow() {
             const isMe = msg.sender_id === user.id
             const isFile = msg.content_type === 'file'
             const replyMsg = msg.reply_to ? getReplyMessage(msg.reply_to) : null
+            const isSystem = msg.content_type === 'system'
             const unreadCount = getUnreadCount(msg)
             
             const prevMsg = index > 0 ? filteredMessages[index - 1] : null
             const isSameSender = prevMsg && prevMsg.sender_id === msg.sender_id
             const showProfile = !isMe && !room?.is_self && !isSameSender
             
-            return (
+            // 시스템 메시지 (나갔습니다 등)
+            if (isSystem) {
+              return (
+                <div key={msg.id} className="flex justify-center my-2">
+                  <span className="px-3 py-1 text-xs text-gray-400 bg-gray-700/50 rounded-full">
+                    {msg.content}
+                  </span>
+                </div>
+              )
+            }
+              return (
               <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} group`}>
                 {/* 상대방 프로필 */}
                 {!isMe && !room?.is_self && (
