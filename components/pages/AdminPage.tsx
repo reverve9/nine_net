@@ -11,6 +11,7 @@ interface User {
   approval_status: string
   created_at: string
   avatar_url?: string
+  deleted_at?: string
 }
 
 interface AdminPageProps {
@@ -21,7 +22,7 @@ interface AdminPageProps {
 export default function AdminPage({ user, profile }: AdminPageProps) {
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all')
+  const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected' | 'deleted'>('all')
 
   useEffect(() => {
     fetchUsers()
@@ -74,15 +75,15 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
     }
   }
 
-  const deleteUser = async (userId: string, email: string) => {
-    if (!confirm(`정말 "${email}" 계정을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+  // 소프트 삭제
+  const softDeleteUser = async (userId: string, email: string) => {
+    if (!confirm(`"${email}" 계정을 삭제하시겠습니까?\n\n삭제된 계정은 '삭제됨' 탭에서 복구할 수 있습니다.`)) {
       return
     }
     
-    // profiles에서 삭제 (auth.users는 Supabase Admin API 필요)
     const { error } = await supabase
       .from('profiles')
-      .delete()
+      .update({ deleted_at: new Date().toISOString() })
       .eq('id', userId)
     
     if (error) {
@@ -92,12 +93,48 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
     }
   }
 
+  // 복구
+  const restoreUser = async (userId: string) => {
+    const { error } = await supabase
+      .from('profiles')
+      .update({ deleted_at: null })
+      .eq('id', userId)
+    
+    if (error) {
+      alert('복구 실패: ' + error.message)
+    } else {
+      fetchUsers()
+    }
+  }
+
+  // 완전 삭제
+  const hardDeleteUser = async (userId: string, email: string) => {
+    if (!confirm(`⚠️ 경고: "${email}" 계정을 완전히 삭제합니다.\n\n이 작업은 되돌릴 수 없습니다!`)) {
+      return
+    }
+    
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', userId)
+    
+    if (error) {
+      alert('완전 삭제 실패: ' + error.message)
+    } else {
+      fetchUsers()
+    }
+  }
+
+  // 필터링: 삭제된 유저 / 활성 유저
   const filteredUsers = users.filter(u => {
+    if (filter === 'deleted') return u.deleted_at !== null
+    if (u.deleted_at) return false // 삭제된 유저는 다른 탭에서 숨김
     if (filter === 'all') return true
     return u.approval_status === filter
   })
 
-  const pendingCount = users.filter(u => u.approval_status === 'pending').length
+  const pendingCount = users.filter(u => !u.deleted_at && u.approval_status === 'pending').length
+  const deletedCount = users.filter(u => u.deleted_at !== null).length
 
   const getRoleName = (role: string) => {
     switch (role) {
@@ -105,18 +142,21 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
       case 'fin_admin': return '회계담당자'
       case 'user': return '일반 직원'
       case 'guest': return '외부 스탭'
-      default: return role
+      default: return role || '일반 직원'
     }
   }
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, deleted_at?: string) => {
+    if (deleted_at) {
+      return <span className="px-2 py-1 text-xs bg-gray-200 text-gray-600 rounded-full">삭제됨</span>
+    }
     switch (status) {
       case 'approved':
         return <span className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded-full">승인됨</span>
       case 'pending':
         return <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-700 rounded-full">대기중</span>
       case 'rejected':
-        return <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">거절됨</span>
+        return <span className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded-full">비활성</span>
       default:
         return <span className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-full">{status}</span>
     }
@@ -156,7 +196,7 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
             filter === 'all' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >
-          전체 ({users.length})
+          전체
         </button>
         <button
           onClick={() => setFilter('pending')}
@@ -164,7 +204,7 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
             filter === 'pending' ? 'bg-yellow-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >
-          승인 대기 ({pendingCount})
+          승인 대기 {pendingCount > 0 && `(${pendingCount})`}
         </button>
         <button
           onClick={() => setFilter('approved')}
@@ -180,7 +220,15 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
             filter === 'rejected' ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
           }`}
         >
-          거절됨
+          비활성
+        </button>
+        <button
+          onClick={() => setFilter('deleted')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+            filter === 'deleted' ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          삭제됨 {deletedCount > 0 && `(${deletedCount})`}
         </button>
       </div>
 
@@ -213,7 +261,7 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
                 </td>
                 <td className="px-4 py-3 text-sm text-gray-600">{u.email}</td>
                 <td className="px-4 py-3">
-                  {u.id === user.id ? (
+                  {u.id === user.id || u.deleted_at ? (
                     <span className="text-sm text-gray-600">{getRoleName(u.role)}</span>
                   ) : (
                     <select
@@ -228,13 +276,32 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
                     </select>
                   )}
                 </td>
-                <td className="px-4 py-3">{getStatusBadge(u.approval_status)}</td>
+                <td className="px-4 py-3">{getStatusBadge(u.approval_status, u.deleted_at)}</td>
                 <td className="px-4 py-3 text-sm text-gray-500">
                   {new Date(u.created_at).toLocaleDateString('ko-KR')}
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
-                    {u.id !== user.id && u.approval_status === 'pending' && (
+                    {/* 삭제된 유저 */}
+                    {u.deleted_at && (
+                      <>
+                        <button
+                          onClick={() => restoreUser(u.id)}
+                          className="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                        >
+                          복구
+                        </button>
+                        <button
+                          onClick={() => hardDeleteUser(u.id, u.email)}
+                          className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                        >
+                          완전삭제
+                        </button>
+                      </>
+                    )}
+                    
+                    {/* 활성 유저 - pending */}
+                    {!u.deleted_at && u.id !== user.id && u.approval_status === 'pending' && (
                       <>
                         <button
                           onClick={() => updateUserStatus(u.id, 'approved')}
@@ -249,14 +316,16 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
                           거절
                         </button>
                         <button
-                          onClick={() => deleteUser(u.id, u.email)}
-                          className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                          onClick={() => softDeleteUser(u.id, u.email)}
+                          className="px-3 py-1 text-xs bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
                         >
                           삭제
                         </button>
                       </>
                     )}
-                    {u.id !== user.id && u.approval_status === 'approved' && (
+                    
+                    {/* 활성 유저 - approved */}
+                    {!u.deleted_at && u.id !== user.id && u.approval_status === 'approved' && (
                       <button
                         onClick={() => updateUserStatus(u.id, 'rejected')}
                         className="px-3 py-1 text-xs bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
@@ -264,7 +333,9 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
                         비활성화
                       </button>
                     )}
-                    {u.id !== user.id && u.approval_status === 'rejected' && (
+                    
+                    {/* 활성 유저 - rejected */}
+                    {!u.deleted_at && u.id !== user.id && u.approval_status === 'rejected' && (
                       <>
                         <button
                           onClick={() => updateUserStatus(u.id, 'approved')}
@@ -273,8 +344,8 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
                           활성화
                         </button>
                         <button
-                          onClick={() => deleteUser(u.id, u.email)}
-                          className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                          onClick={() => softDeleteUser(u.id, u.email)}
+                          className="px-3 py-1 text-xs bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition"
                         >
                           삭제
                         </button>
