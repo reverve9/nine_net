@@ -74,6 +74,24 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
     }
   }
 
+  const deleteUser = async (userId: string, email: string) => {
+    if (!confirm(`정말 "${email}" 계정을 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) {
+      return
+    }
+    
+    // profiles에서 삭제 (auth.users는 Supabase Admin API 필요)
+    const { error } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', userId)
+    
+    if (error) {
+      alert('삭제 실패: ' + error.message)
+    } else {
+      fetchUsers()
+    }
+  }
+
   const filteredUsers = users.filter(u => {
     if (filter === 'all') return true
     return u.approval_status === filter
@@ -215,38 +233,54 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
                   {new Date(u.created_at).toLocaleDateString('ko-KR')}
                 </td>
                 <td className="px-4 py-3">
-                  {u.id !== user.id && u.approval_status === 'pending' && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => updateUserStatus(u.id, 'approved')}
-                        className="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-                      >
-                        승인
-                      </button>
+                  <div className="flex gap-2">
+                    {u.id !== user.id && u.approval_status === 'pending' && (
+                      <>
+                        <button
+                          onClick={() => updateUserStatus(u.id, 'approved')}
+                          className="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
+                        >
+                          승인
+                        </button>
+                        <button
+                          onClick={() => updateUserStatus(u.id, 'rejected')}
+                          className="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                        >
+                          거절
+                        </button>
+                        <button
+                          onClick={() => deleteUser(u.id, u.email)}
+                          className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                        >
+                          삭제
+                        </button>
+                      </>
+                    )}
+                    {u.id !== user.id && u.approval_status === 'approved' && (
                       <button
                         onClick={() => updateUserStatus(u.id, 'rejected')}
-                        className="px-3 py-1 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+                        className="px-3 py-1 text-xs bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
                       >
-                        거절
+                        비활성화
                       </button>
-                    </div>
-                  )}
-                  {u.id !== user.id && u.approval_status === 'rejected' && (
-                    <button
-                      onClick={() => updateUserStatus(u.id, 'approved')}
-                      className="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition"
-                    >
-                      승인으로 변경
-                    </button>
-                  )}
-                  {u.id !== user.id && u.approval_status === 'approved' && (
-                    <button
-                      onClick={() => updateUserStatus(u.id, 'rejected')}
-                      className="px-3 py-1 text-xs bg-gray-400 text-white rounded-lg hover:bg-gray-500 transition"
-                    >
-                      비활성화
-                    </button>
-                  )}
+                    )}
+                    {u.id !== user.id && u.approval_status === 'rejected' && (
+                      <>
+                        <button
+                          onClick={() => updateUserStatus(u.id, 'approved')}
+                          className="px-3 py-1 text-xs bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition"
+                        >
+                          활성화
+                        </button>
+                        <button
+                          onClick={() => deleteUser(u.id, u.email)}
+                          className="px-3 py-1 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700 transition"
+                        >
+                          삭제
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
