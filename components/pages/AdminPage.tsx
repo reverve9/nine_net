@@ -28,11 +28,13 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
   }, [])
 
   const fetchUsers = async () => {
-    const { data } = await supabase
+    console.log('fetchUsers called')
+    const { data, error } = await supabase
       .from('profiles')
       .select('*')
       .order('created_at', { ascending: false })
     
+    console.log('fetchUsers result:', data, error)
     if (data) setUsers(data)
     setLoading(false)
   }
