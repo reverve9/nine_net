@@ -81,9 +81,15 @@ export default function LoginPage() {
         .from('profiles')
         .update({ approval_status: 'pending' })
         .eq('id', data.user.id)
+      
+      // 자동 로그인 방지 - 즉시 로그아웃
+      await supabase.auth.signOut()
     }
 
     setMessage('회원가입이 완료되었습니다. 관리자 승인 후 로그인 가능합니다.')
+    setEmail('')
+    setPassword('')
+    setName('')
     setLoading(false)
   }
 
