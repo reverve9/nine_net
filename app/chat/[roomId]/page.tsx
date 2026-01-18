@@ -381,7 +381,15 @@ export default function ChatWindow() {
       return
     }
     
-    // 시스템 메시지 추가 (삭제 후)
+    
+    // 창 먼저 닫기
+    if (window.electronAPI?.isElectron) {
+      window.electronAPI.closeWindow?.()
+    } else {
+      window.close()
+    }
+    
+    // 시스템 메시지 추가 (창 닫은 후)
     supabase.from('messages').insert({
       content: `${myName}님이 나갔습니다.`,
       content_type: 'system',
@@ -389,13 +397,6 @@ export default function ChatWindow() {
       room_id: roomId,
       read_by: [],
     })
-    
-    // 창 닫기
-    if (window.electronAPI?.isElectron) {
-      window.electronAPI.closeWindow?.()
-    } else {
-      window.close()
-    }
   }
 
   const handleCreatePost = async () => {
