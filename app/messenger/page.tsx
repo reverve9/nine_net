@@ -342,10 +342,13 @@ export default function MessengerMain() {
     if (data) setMembers(data)
   }
 
-  const openChatWindow = (room: ChatRoom) => {
+  const openChatWindow = (room: ChatRoom, preOpenedWindow?: Window | null) => {
     const roomName = room.is_self ? '나와의 채팅' : (room.display_name || room.name)
     if (window.electronAPI?.isElectron) {
       window.electronAPI.openChat(room.id, roomName)
+    } else if (preOpenedWindow) {
+      // 이미 열린 창에 URL 설정
+      preOpenedWindow.location.href = `/chat/${room.id}`
     } else {
       // 웹: 새 창으로 채팅 열기 (Electron과 동일 사이즈)
       const width = 400
@@ -360,12 +363,29 @@ export default function MessengerMain() {
     }
   }
 
+  // 웹용: 미리 창 열기
+  const preOpenChatWindow = () => {
+    if (window.electronAPI?.isElectron) return null
+    const width = 400
+    const height = 550
+    const left = window.screen.width - width - 40
+    const top = 120
+    return window.open(
+      'about:blank',
+      `chat_${Date.now()}`,
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=no`
+    )
+  }
+
   const openSelfChat = async () => {
     const selfRoom = rooms.find(r => r.is_self)
     if (selfRoom) openChatWindow(selfRoom)
   }
 
   const startDirectChat = async (member: Member) => {
+    // 웹: 팝업 차단 방지를 위해 미리 창 열기
+    const preOpened = preOpenChatWindow()
+    
     // 1. 내가 참여 중인 1:1 채팅방에서 상대방도 있는지 확인
     const { data: myMemberships } = await supabase
       .from('room_members')
@@ -391,7 +411,7 @@ export default function MessengerMain() {
 
           if (memberCheck && memberCheck.length > 0) {
             // 둘 다 있는 기존 방 열기
-            openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] })
+            openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] }, preOpened)
             return
           }
         }
@@ -428,7 +448,7 @@ export default function MessengerMain() {
               user_id: user.id,
             })
             await fetchRooms()
-            openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] })
+            openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] }, preOpened)
             return
           }
         }
@@ -448,7 +468,10 @@ export default function MessengerMain() {
         { room_id: newRoom.id, user_id: member.id },
       ])
       await fetchRooms()
-      openChatWindow({ ...newRoom, display_name: member.name || member.email?.split('@')[0] })
+      openChatWindow({ ...newRoom, display_name: member.name || member.email?.split('@')[0] }, preOpened)
+    } else {
+      // 실패 시 미리 연 창 닫기
+      preOpened?.close()
     }
   }
 
