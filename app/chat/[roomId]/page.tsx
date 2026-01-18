@@ -235,12 +235,15 @@ export default function ChatWindow() {
     }
   }, [user, roomId])
   
+  // 새 메시지 도착 시 스크롤 (초기 로드 제외)
+  const prevMessagesLength = useRef(0)
   useEffect(() => { 
-    // 초기 로드 완료 후 스크롤 아래로, 이후에는 새 메시지만
-    if (!isInitialLoad) {
+    // 새 메시지가 추가되었을 때만 스크롤 (이전 메시지 로드 시에는 스크롤 안 함)
+    if (messages.length > prevMessagesLength.current && prevMessagesLength.current > 0) {
       scrollToBottom() 
     }
-  }, [messages, isInitialLoad])
+    prevMessagesLength.current = messages.length
+  }, [messages])
   
   useEffect(() => {
     if (user && messages.length > 0 && !room?.is_self) {
