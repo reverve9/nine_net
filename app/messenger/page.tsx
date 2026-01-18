@@ -447,7 +447,7 @@ export default function MessengerMain() {
     setRooms(prev => prev.filter(r => r.id !== roomId))
     
     // 시스템 메시지 추가 (삭제 후)
-    supabase.from('messages').insert({
+    await supabase.from('messages').insert({
       content: `${profile?.name || user.email?.split('@')[0]}님이 나갔습니다.`,
       content_type: 'system',
       sender_id: user.id,
