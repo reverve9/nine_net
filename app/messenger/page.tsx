@@ -347,7 +347,16 @@ export default function MessengerMain() {
     if (window.electronAPI?.isElectron) {
       window.electronAPI.openChat(room.id, roomName)
     } else {
-      window.open(`/chat/${room.id}`, '_blank')
+      // 웹: 새 창으로 채팅 열기 (Electron과 동일 사이즈)
+      const width = 400
+      const height = 550
+      const left = window.screen.width - width - 40
+      const top = 120
+      window.open(
+        `/chat/${room.id}`,
+        `chat_${room.id}`,
+        `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=no`
+      )
     }
   }
 
