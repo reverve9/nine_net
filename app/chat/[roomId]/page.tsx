@@ -162,7 +162,16 @@ export default function ChatWindow() {
             table: 'room_members',
             filter: `room_id=eq.${roomId}`,
           },
-          () => {
+          async (payload) => {
+            // 내가 삭제됐으면 창 닫기
+            if (payload.eventType === 'DELETE' && payload.old.user_id === user.id) {
+              if (window.electronAPI?.isElectron) {
+                window.electronAPI.closeWindow?.()
+              } else {
+                window.close()
+              }
+              return
+            }
             fetchMembers()
           }
         )

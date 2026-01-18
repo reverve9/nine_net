@@ -35,7 +35,6 @@ interface ContextMenu {
   isSelf: boolean
 }
 
-// UPDATED VERSION WITH 1:1 CHAT FIX
 export default function MessengerMain() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<Member | null>(null)
@@ -200,6 +199,8 @@ export default function MessengerMain() {
                 if (otherUser) {
                   displayName = otherUser.name || otherUser.email?.split('@')[0] || room.name
                 }
+              } else {
+                displayName = '대화 상대 없음'
               }
             }
           } else {
@@ -225,18 +226,16 @@ export default function MessengerMain() {
                     .map(u => u.name || u.email?.split('@')[0])
                     .join(', ')
                 }
+              } else {
+                displayName = '대화 상대 없음'
               }
             }
           }
 
-          // 마지막 메시지 표시 (시스템 메시지 처리)
+          // 마지막 메시지 표시
           let lastMessageText = ''
           if (lastMsg) {
-            if (lastMsg.content_type === 'system') {
-              lastMessageText = lastMsg.content
-            } else {
-              lastMessageText = lastMsg.content
-            }
+            lastMessageText = lastMsg.content
           }
 
           return {
@@ -283,7 +282,7 @@ export default function MessengerMain() {
   }
 
   const startDirectChat = async (member: Member) => {
-    // 기존 1:1 채팅방 찾기
+    // 1. 내가 참여 중인 1:1 채팅방에서 상대방도 있는지 확인
     const { data: myMemberships } = await supabase
       .from('room_members')
       .select('room_id')
@@ -291,18 +290,15 @@ export default function MessengerMain() {
 
     if (myMemberships) {
       for (const membership of myMemberships) {
-        // 해당 방이 1:1 채팅인지 확인
-        const { data: rooms } = await supabase
+        const { data: room } = await supabase
           .from('chat_rooms')
           .select('*')
           .eq('id', membership.room_id)
           .eq('is_group', false)
           .eq('is_self', false)
-        
-        const room = rooms && rooms.length > 0 ? rooms[0] : null
+          .single()
 
         if (room) {
-          // 상대방이 이 방에 있는지 확인
           const { data: memberCheck } = await supabase
             .from('room_members')
             .select('user_id')
@@ -310,6 +306,7 @@ export default function MessengerMain() {
             .eq('user_id', member.id)
 
           if (memberCheck && memberCheck.length > 0) {
+            // 둘 다 있는 기존 방 열기
             openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] })
             return
           }
@@ -317,7 +314,44 @@ export default function MessengerMain() {
       }
     }
 
-    // 새 채팅방 생성
+    // 2. 상대방이 참여 중인 1:1 채팅방에서 나와의 기존 방 찾기 (내가 나갔던 방)
+    const { data: theirMemberships } = await supabase
+      .from('room_members')
+      .select('room_id')
+      .eq('user_id', member.id)
+
+    if (theirMemberships) {
+      for (const membership of theirMemberships) {
+        const { data: room } = await supabase
+          .from('chat_rooms')
+          .select('*')
+          .eq('id', membership.room_id)
+          .eq('is_group', false)
+          .eq('is_self', false)
+          .single()
+
+        if (room) {
+          // 이 방의 멤버 확인
+          const { data: allRoomMembers } = await supabase
+            .from('room_members')
+            .select('user_id')
+            .eq('room_id', room.id)
+
+          // 상대방만 있는 1:1 방이면 나를 다시 추가
+          if (allRoomMembers && allRoomMembers.length === 1 && allRoomMembers[0].user_id === member.id) {
+            await supabase.from('room_members').insert({
+              room_id: room.id,
+              user_id: user.id,
+            })
+            await fetchRooms()
+            openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] })
+            return
+          }
+        }
+      }
+    }
+
+    // 3. 새 채팅방 생성
     const roomName = `${member.name || member.email?.split('@')[0]}`
     
     const { data: newRoom } = await supabase
@@ -396,16 +430,7 @@ export default function MessengerMain() {
       return
     }
     
-    // 시스템 메시지 추가 (나가기 전에)
-    await supabase.from('messages').insert({
-      content: `${profile?.name || user.email?.split('@')[0]}님이 나갔습니다.`,
-      content_type: 'system',
-      sender_id: user.id,
-      room_id: roomId,
-      read_by: [],
-    })
-    
-    // room_members에서 삭제
+    // room_members에서 먼저 삭제
     const { error } = await supabase
       .from('room_members')
       .delete()
@@ -413,12 +438,22 @@ export default function MessengerMain() {
       .eq('user_id', user.id)
     
     if (error) {
-      console.error('나가기 실패:', error)
       alert('채팅방 나가기에 실패했습니다: ' + error.message)
-    } else {
-      // 리스트에서 제거
-      setRooms(prev => prev.filter(r => r.id !== roomId))
+      setContextMenu(prev => ({ ...prev, show: false }))
+      return
     }
+    
+    // 리스트에서 제거
+    setRooms(prev => prev.filter(r => r.id !== roomId))
+    
+    // 시스템 메시지 추가 (삭제 후)
+    supabase.from('messages').insert({
+      content: `${profile?.name || user.email?.split('@')[0]}님이 나갔습니다.`,
+      content_type: 'system',
+      sender_id: user.id,
+      room_id: roomId,
+      read_by: [],
+    })
     
     setContextMenu(prev => ({ ...prev, show: false }))
   }
