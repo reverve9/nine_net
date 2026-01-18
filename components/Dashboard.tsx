@@ -77,6 +77,7 @@ export default function Dashboard({ user }: DashboardProps) {
         setCollapsed={setSidebarCollapsed}
         user={user}
         profile={profile}
+        setProfile={setProfile}
         onLogout={handleLogout}
       />
       
