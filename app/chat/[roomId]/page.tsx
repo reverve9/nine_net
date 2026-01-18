@@ -76,8 +76,14 @@ export default function ChatWindow() {
     fontSize: 14,
     fontWeight: 'normal',
   })
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(true)
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  
+  const PAGE_SIZE = 30
 
   // 설정 로드
   useEffect(() => {
@@ -121,7 +127,10 @@ export default function ChatWindow() {
     if (user && roomId) { 
       fetchProfile()
       fetchRoom()
-      fetchMessages()
+      fetchMessages().then(() => {
+        // 초기 로드 완료 후 스크롤 아래로
+        setTimeout(() => scrollToBottom(), 100)
+      })
       fetchMembers()
       fetchBoardPosts()
       
@@ -226,7 +235,12 @@ export default function ChatWindow() {
     }
   }, [user, roomId])
   
-  useEffect(() => { scrollToBottom() }, [messages])
+  useEffect(() => { 
+    // 초기 로드 완료 후 스크롤 아래로, 이후에는 새 메시지만
+    if (!isInitialLoad) {
+      scrollToBottom() 
+    }
+  }, [messages, isInitialLoad])
   
   useEffect(() => {
     if (user && messages.length > 0 && !room?.is_self) {
@@ -252,15 +266,60 @@ export default function ChatWindow() {
     }
   }
 
-  const fetchMessages = async () => {
-    const { data } = await supabase
+  const fetchMessages = async (loadMore = false) => {
+    if (loadMore) {
+      setLoadingMore(true)
+    }
+    
+    let query = supabase
       .from('messages')
       .select('*, sender:profiles!sender_id(name)')
       .eq('room_id', roomId)
-      .order('created_at', { ascending: true })
-      .limit(100)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE)
     
-    if (data) setMessages(data)
+    // 추가 로드 시: 가장 오래된 메시지보다 이전 것들
+    if (loadMore && messages.length > 0) {
+      const oldestMsg = messages[0]
+      query = query.lt('created_at', oldestMsg.created_at)
+    }
+    
+    const { data } = await query
+    
+    if (data) {
+      // 시간순 정렬 (오래된 것 → 최신)
+      const sorted = data.reverse()
+      
+      if (loadMore) {
+        // 이전 메시지 앞에 추가
+        setMessages(prev => [...sorted, ...prev])
+        setHasMore(data.length === PAGE_SIZE)
+      } else {
+        setMessages(sorted)
+        setHasMore(data.length === PAGE_SIZE)
+        setIsInitialLoad(false)
+      }
+    }
+    
+    setLoadingMore(false)
+  }
+  
+  // 스크롤 맨 위 감지 → 이전 메시지 로드
+  const handleScroll = () => {
+    const container = messagesContainerRef.current
+    if (!container || loadingMore || !hasMore) return
+    
+    // 맨 위에서 50px 이내면 로드
+    if (container.scrollTop < 50) {
+      const prevScrollHeight = container.scrollHeight
+      fetchMessages(true).then(() => {
+        // 스크롤 위치 유지
+        requestAnimationFrame(() => {
+          const newScrollHeight = container.scrollHeight
+          container.scrollTop = newScrollHeight - prevScrollHeight
+        })
+      })
+    }
   }
 
   const fetchMembers = async () => {
@@ -767,7 +826,25 @@ export default function ChatWindow() {
       )}
 
       {/* 메시지 목록 */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div 
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-3 space-y-3"
+      >
+        {/* 이전 메시지 로딩 스피너 */}
+        {loadingMore && (
+          <div className="flex justify-center py-2">
+            <div className="animate-spin w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full"></div>
+          </div>
+        )}
+        
+        {/* 더 불러올 메시지 있음 표시 */}
+        {hasMore && !loadingMore && messages.length > 0 && (
+          <div className="flex justify-center py-2">
+            <span className="text-xs" style={{ color: textColorMuted }}>↑ 스크롤하여 이전 메시지 보기</span>
+          </div>
+        )}
+        
         {filteredMessages.length === 0 ? (
           <p className="text-center text-gray-400 text-xs mt-8">
             {searchQuery ? '검색 결과가 없습니다' : room?.is_self ? '메모를 작성해보세요 ✏️' : '첫 메시지를 보내보세요 👋'}
