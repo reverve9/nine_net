@@ -75,6 +75,17 @@ export default function MessengerMain() {
             fetchRooms()
           }
         )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'room_members',
+          },
+          () => {
+            fetchRooms()
+          }
+        )
         .subscribe()
       
       return () => {
@@ -140,7 +151,7 @@ export default function MessengerMain() {
           // 최신 메시지
           const { data: lastMsgs } = await supabase
             .from('messages')
-            .select('content, created_at')
+            .select('content, created_at, content_type')
             .eq('room_id', room.id)
             .order('created_at', { ascending: false })
             .limit(1)
@@ -217,7 +228,159 @@ export default function MessengerMain() {
             }
           }
 
+          // 마지막 메시지 표시 (시스템 메시지 처리)
+          let lastMessageText = ''
+          if (lastMsg) {
+            if (lastMsg.content_type === 'system') {
+              lastMessageText = lastMsg.content
+            } else {
+              lastMessageText = lastMsg.content
+            }
+          }
+
           return {
+            ...room,
+            display_name: displayName,
+            last_message: lastMessageText || '',
+            last_message_time: lastMsg?.created_at || room.created_at,
+            unread_count: unreadCount,
+            is_pinned: pinnedRooms.includes(room.id)
+          }
+        })
+      )
+
+      // 정렬
+      const sortedRooms = roomsWithMessages.sort((a, b) => {
+        if (a.is_self) return -1
+        if (b.is_self) return 1
+        if (a.is_pinned && !b.is_pinned) return -1
+        if (!a.is_pinned && b.is_pinned) return 1
+        return new Date(b.last_message_time || 0).getTime() - new Date(a.last_message_time || 0).getTime()
+      })
+
+      setRooms(sortedRooms)
+    }
+  }
+
+  const fetchMembers = async () => {
+    const { data } = await supabase.from('profiles').select('*').neq('id', user.id)
+    if (data) setMembers(data)
+  }
+
+  const openChatWindow = (room: ChatRoom) => {
+    const roomName = room.is_self ? '나와의 채팅' : (room.display_name || room.name)
+    if (window.electronAPI?.isElectron) {
+      window.electronAPI.openChat(room.id, roomName)
+    } else {
+      window.open(`/chat/${room.id}`, '_blank')
+    }
+  }
+
+  const openSelfChat = async () => {
+    const selfRoom = rooms.find(r => r.is_self)
+    if (selfRoom) openChatWindow(selfRoom)
+  }
+
+  const startDirectChat = async (member: Member) => {
+    // 기존 1:1 채팅방 찾기
+    const { data: myMemberships } = await supabase
+      .from('room_members')
+      .select('room_id')
+      .eq('user_id', user.id)
+
+    if (myMemberships) {
+      for (const membership of myMemberships) {
+        // 해당 방이 1:1 채팅인지 확인
+        const { data: rooms } = await supabase
+          .from('chat_rooms')
+          .select('*')
+          .eq('id', membership.room_id)
+          .eq('is_group', false)
+          .eq('is_self', false)
+        
+        const room = rooms && rooms.length > 0 ? rooms[0] : null
+
+        if (room) {
+          // 상대방이 이 방에 있는지 확인
+          const { data: memberCheck } = await supabase
+            .from('room_members')
+            .select('user_id')
+            .eq('room_id', room.id)
+            .eq('user_id', member.id)
+
+          if (memberCheck && memberCheck.length > 0) {
+            openChatWindow({ ...room, display_name: member.name || member.email?.split('@')[0] })
+            return
+          }
+        }
+      }
+    }
+
+    // 새 채팅방 생성
+    const roomName = `${member.name || member.email?.split('@')[0]}`
+    
+    const { data: newRoom } = await supabase
+      .from('chat_rooms')
+      .insert({ name: roomName, is_group: false, is_self: false, created_by: user.id })
+      .select()
+      .single()
+
+    if (newRoom) {
+      await supabase.from('room_members').insert([
+        { room_id: newRoom.id, user_id: user.id },
+        { room_id: newRoom.id, user_id: member.id }
+      ])
+
+      await fetchRooms()
+      openChatWindow({ ...newRoom, display_name: member.name || member.email?.split('@')[0] })
+    }
+  }
+
+  const createGroupChat = async () => {
+    const name = prompt('그룹 채팅방 이름:')
+    if (!name) return
+    
+    const { data: newRoom } = await supabase
+      .from('chat_rooms')
+      .insert({ name, is_group: true, is_self: false, created_by: user.id })
+      .select()
+      .single()
+
+    if (newRoom) {
+      await supabase.from('room_members').insert({ room_id: newRoom.id, user_id: user.id })
+      await fetchRooms()
+      openChatWindow(newRoom)
+    }
+  }
+
+  const handleContextMenu = (e: React.MouseEvent, room: ChatRoom) => {
+    e.preventDefault()
+    setContextMenu({
+      show: true,
+      x: e.clientX,
+      y: e.clientY,
+      roomId: room.id,
+      isSelf: room.is_self || false
+    })
+  }
+
+  const handleOpenRoom = () => {
+    const room = rooms.find(r => r.id === contextMenu.roomId)
+    if (room) openChatWindow(room)
+    setContextMenu(prev => ({ ...prev, show: false }))
+  }
+
+  const handlePinRoom = () => {
+    const roomId = contextMenu.roomId
+    if (pinnedRooms.includes(roomId)) {
+      setPinnedRooms(prev => prev.filter(id => id !== roomId))
+    } else {
+      setPinnedRooms(prev => [...prev, roomId])
+    }
+    setContextMenu(prev => ({ ...prev, show: false }))
+    setTimeout(() => fetchRooms(), 100)
+  }
+
   const handleLeaveRoom = async () => {
     const roomId = contextMenu.roomId
     
@@ -254,14 +417,11 @@ export default function MessengerMain() {
     } else {
       // 리스트에서 제거
       setRooms(prev => prev.filter(r => r.id !== roomId))
-      // 열린 채팅창 닫기
-      if (window.electronAPI?.closeChatWindow) {
-        window.electronAPI.closeChatWindow(roomId)
-      }
     }
     
     setContextMenu(prev => ({ ...prev, show: false }))
   }
+
   const updateUserStatus = async (status: 'online' | 'away' | 'offline') => {
     await supabase.from('profiles').update({ status }).eq('id', user.id)
     setProfile(prev => prev ? { ...prev, status } : null)
