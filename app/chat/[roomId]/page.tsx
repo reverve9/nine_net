@@ -367,15 +367,9 @@ export default function ChatWindow() {
     
     if (!confirm('채팅방을 나가시겠습니까?')) return
     
-    // 시스템 메시지 추가 (나가기 전에)
-    await supabase.from('messages').insert({
-      content: `${profile?.name || user.email?.split('@')[0]}님이 나갔습니다.`,
-      content_type: 'system',
-      sender_id: user.id,
-      room_id: roomId,
-      read_by: [],
-    })
+    const myName = profile?.name || user.email?.split('@')[0]
     
+    // 먼저 삭제
     const { error } = await supabase
       .from('room_members')
       .delete()
@@ -387,6 +381,15 @@ export default function ChatWindow() {
       return
     }
     
+    // 시스템 메시지 추가 (삭제 후)
+    supabase.from('messages').insert({
+      content: `${myName}님이 나갔습니다.`,
+      content_type: 'system',
+      sender_id: user.id,
+      room_id: roomId,
+      read_by: [],
+    })
+    
     // 창 닫기
     if (window.electronAPI?.isElectron) {
       window.electronAPI.closeWindow?.()
@@ -397,7 +400,6 @@ export default function ChatWindow() {
 
   const handleCreatePost = async () => {
     if (!newPostTitle.trim() || !newPostContent.trim()) return
-    
     await supabase.from('board_posts').insert({
       title: newPostTitle.trim(),
       content: newPostContent.trim(),
