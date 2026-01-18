@@ -11,6 +11,7 @@ declare global {
       minimizeWindow: () => void
       onLogout: () => void
       onLogin: () => void
+      showNotification: (title: string, body: string) => void
     }
   }
 }
