@@ -247,13 +247,14 @@ export default function ChatWindow() {
     const { data: all } = await supabase.from('profiles').select('id, name, email')
     if (all) setAllMembers(all)
     
-    const { data: members } = await supabase
+    const { data: memberIds } = await supabase
       .from('room_members')
-      .select('user_id, profiles:user_id(id, name, email)')
+      .select('user_id')
       .eq('room_id', roomId)
     
-    if (members) {
-      const memberList = members.map((m: any) => m.profiles).filter(Boolean)
+    if (memberIds && all) {
+      const userIds = memberIds.map((m: any) => m.user_id)
+      const memberList = all.filter((p: any) => userIds.includes(p.id))
       setRoomMembers(memberList)
     }
   }
@@ -400,6 +401,7 @@ export default function ChatWindow() {
     
     if (!confirm('채팅방을 나가시겠습니까?')) return
     
+    console.log("DEBUG 삭제 전:", { roomId, userId: user.id });
     const { error } = await supabase
       .from('room_members')
       .delete()
@@ -411,6 +413,7 @@ export default function ChatWindow() {
       alert('채팅방 나가기에 실패했습니다: ' + error.message)
       return
     }
+    console.log("DEBUG 삭제 성공!");
     
     // 창 닫기
     if (window.electronAPI?.isElectron) {
@@ -496,7 +499,7 @@ export default function ChatWindow() {
   })
 
   // 멤버 수 (나 제외)
-  const memberCount = roomMembers.filter(m => m.id !== user?.id).length
+  const memberCount = roomMembers.length
 
   if (loading) {
     return (

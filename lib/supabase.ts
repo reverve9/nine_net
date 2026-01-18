@@ -5,6 +5,11 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
+// 디버깅용 전역 노출
+if (typeof window !== 'undefined') {
+  (window as any).supabase = supabase
+}
+
 // 타입 정의
 export type User = {
   id: string
