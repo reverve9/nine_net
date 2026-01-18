@@ -17,14 +17,40 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
     if (error) {
       setError(error.message)
+      setLoading(false)
+      return
     }
+
+    // 승인 상태 확인
+    if (data.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('approval_status')
+        .eq('id', data.user.id)
+        .single()
+
+      if (profile?.approval_status === 'pending') {
+        await supabase.auth.signOut()
+        setError('가입 승인 대기 중입니다. 관리자 승인 후 이용 가능합니다.')
+        setLoading(false)
+        return
+      }
+
+      if (profile?.approval_status === 'rejected') {
+        await supabase.auth.signOut()
+        setError('가입이 거절되었습니다. 관리자에게 문의하세요.')
+        setLoading(false)
+        return
+      }
+    }
+
     setLoading(false)
   }
 
@@ -33,7 +59,7 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -45,9 +71,19 @@ export default function LoginPage() {
 
     if (error) {
       setError(error.message)
-    } else {
-      setMessage('가입 확인 이메일을 확인해주세요!')
+      setLoading(false)
+      return
     }
+
+    // 프로필에 pending 상태 설정
+    if (data.user) {
+      await supabase
+        .from('profiles')
+        .update({ approval_status: 'pending' })
+        .eq('id', data.user.id)
+    }
+
+    setMessage('회원가입이 완료되었습니다. 관리자 승인 후 로그인 가능합니다.')
     setLoading(false)
   }
 
@@ -59,14 +95,14 @@ export default function LoginPage() {
           <div className="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">🏢</span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-800">우리회사</h1>
+          <h1 className="text-2xl font-bold text-gray-800">Nine Net</h1>
           <p className="text-gray-500 mt-1">사내 인트라넷</p>
         </div>
 
         {/* 탭 */}
         <div className="flex mb-6">
           <button
-            onClick={() => setIsLogin(true)}
+            onClick={() => { setIsLogin(true); setError(''); setMessage('') }}
             className={`flex-1 py-2 text-center font-medium transition ${
               isLogin
                 ? 'text-blue-600 border-b-2 border-blue-600'
@@ -76,7 +112,7 @@ export default function LoginPage() {
             로그인
           </button>
           <button
-            onClick={() => setIsLogin(false)}
+            onClick={() => { setIsLogin(false); setError(''); setMessage('') }}
             className={`flex-1 py-2 text-center font-medium transition ${
               !isLogin
                 ? 'text-blue-600 border-b-2 border-blue-600'
@@ -157,7 +193,7 @@ export default function LoginPage() {
 
         {/* 추가 정보 */}
         <p className="text-center text-gray-400 text-sm mt-6">
-          © 2024 우리회사. All rights reserved.
+          © 2024 Nine Net. All rights reserved.
         </p>
       </div>
     </div>

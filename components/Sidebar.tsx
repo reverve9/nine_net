@@ -1,6 +1,6 @@
 'use client'
 
-type PageType = 'home' | 'board' | 'schedule' | 'settings'
+type PageType = 'home' | 'board' | 'schedule' | 'settings' | 'admin'
 
 interface SidebarProps {
   currentPage: PageType
@@ -12,11 +12,12 @@ interface SidebarProps {
   onLogout: () => void
 }
 
-const menuItems: { id: PageType; icon: string; label: string }[] = [
+const menuItems: { id: PageType; icon: string; label: string; adminOnly?: boolean }[] = [
   { id: 'home', icon: '🏠', label: '홈' },
   { id: 'board', icon: '📋', label: '게시판' },
   { id: 'schedule', icon: '📅', label: '일정' },
   { id: 'settings', icon: '⚙️', label: '설정' },
+  { id: 'admin', icon: '👑', label: '사용자 관리', adminOnly: true },
 ]
 
 export default function Sidebar({
@@ -28,6 +29,19 @@ export default function Sidebar({
   profile,
   onLogout,
 }: SidebarProps) {
+  const isAdmin = profile?.role === 'super_admin'
+
+  const getRoleBadge = (role: string) => {
+    switch (role) {
+      case 'super_admin': return '대표'
+      case 'fin_admin': return '회계'
+      case 'guest': return '외부'
+      default: return null
+    }
+  }
+
+  const roleBadge = getRoleBadge(profile?.role)
+
   return (
     <div
       className={`${
@@ -37,7 +51,7 @@ export default function Sidebar({
       {/* 로고 영역 */}
       <div className="p-4 border-b border-gray-200 flex items-center justify-between">
         {!collapsed && (
-          <span className="font-bold text-gray-800">🏢 우리회사</span>
+          <span className="font-bold text-gray-800">🏢 Nine Net</span>
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
@@ -49,7 +63,9 @@ export default function Sidebar({
 
       {/* 메뉴 */}
       <nav className="flex-1 p-2">
-        {menuItems.map((item) => (
+        {menuItems
+          .filter(item => !item.adminOnly || isAdmin)
+          .map((item) => (
           <button
             key={item.id}
             onClick={() => setCurrentPage(item.id)}
@@ -80,7 +96,7 @@ export default function Sidebar({
               <img
                 src={profile.avatar_url}
                 alt="avatar"
-                className="w-8 h-8 rounded-full"
+                className="w-8 h-8 rounded-full object-cover"
               />
             ) : (
               <span>👤</span>
@@ -88,9 +104,16 @@ export default function Sidebar({
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-700 truncate">
-                {profile?.name || user?.email?.split('@')[0]}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-gray-700 truncate">
+                  {profile?.name || user?.email?.split('@')[0]}
+                </p>
+                {roleBadge && (
+                  <span className="px-1.5 py-0.5 text-[10px] bg-blue-100 text-blue-600 rounded">
+                    {roleBadge}
+                  </span>
+                )}
+              </div>
               <button
                 onClick={onLogout}
                 className="text-xs text-gray-400 hover:text-red-500"

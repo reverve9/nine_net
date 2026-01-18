@@ -8,8 +8,9 @@ import HomePage from './pages/HomePage'
 import BoardPage from './pages/BoardPage'
 import SchedulePage from './pages/SchedulePage'
 import SettingsPage from './pages/SettingsPage'
+import AdminPage from './pages/AdminPage'
 
-type PageType = 'home' | 'board' | 'schedule' | 'settings'
+type PageType = 'home' | 'board' | 'schedule' | 'settings' | 'admin'
 
 interface DashboardProps {
   user: any
@@ -60,6 +61,8 @@ export default function Dashboard({ user }: DashboardProps) {
         return <SchedulePage user={user} />
       case 'settings':
         return <SettingsPage user={user} profile={profile} setProfile={setProfile} />
+      case 'admin':
+        return <AdminPage user={user} profile={profile} />
       default:
         return <HomePage user={user} profile={profile} setCurrentPage={setCurrentPage} />
     }
