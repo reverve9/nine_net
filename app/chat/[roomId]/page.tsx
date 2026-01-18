@@ -92,6 +92,7 @@ export default function ChatWindow() {
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [showMentionList, setShowMentionList] = useState(false)
   const [mentionFilter, setMentionFilter] = useState('')
+  const [isSending, setIsSending] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -129,6 +130,7 @@ export default function ChatWindow() {
               .single()
             
             setMessages(prev => {
+              // 중복 체크 강화
               if (prev.some(m => m.id === newMsg.id)) {
                 return prev
               }
@@ -285,7 +287,9 @@ export default function ChatWindow() {
   }
 
   const handleSend = async () => {
-    if (!newMessage.trim() || !roomId || !user) return
+    if (!newMessage.trim() || !roomId || !user || isSending) return
+    
+    setIsSending(true)
     
     const messageData: any = {
       content: newMessage.trim(),
@@ -307,9 +311,14 @@ export default function ChatWindow() {
     if (error) {
       alert('메시지 전송에 실패했습니다: ' + error.message)
     }
+    
+    setIsSending(false)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // 한글 조합 중이면 무시 (nativeEvent.isComposing)
+    if (e.nativeEvent.isComposing) return
+    
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -455,7 +464,7 @@ export default function ChatWindow() {
 
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#494949]">
+      <div className="h-screen flex items-center justify-center bg-[#666666]">
         <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
       </div>
     )
@@ -463,20 +472,20 @@ export default function ChatWindow() {
 
   if (!user) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#494949] p-4">
+      <div className="h-screen flex flex-col items-center justify-center bg-[#666666] p-4">
         <p className="text-gray-300 text-xs">로그인이 필요합니다</p>
       </div>
     )
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#494949] overflow-hidden">
+    <div className="h-screen flex flex-col bg-[#666666] overflow-hidden">
       {/* 헤더 */}
       <div 
-        className="bg-[#494949] flex-shrink-0 px-3 py-2"
+        className="bg-[#666666] flex-shrink-0 px-3 py-2"
         style={{ WebkitAppRegion: 'drag' } as any}
       >
-        <div className="flex items-center justify-between mb-1 min-h-[16px]">
+        <div className="flex items-center justify-between mb-[10px] min-h-[16px]">
           {isElectron && (
             <div className="flex gap-1.5" style={{ WebkitAppRegion: 'no-drag' } as any}>
               <button onClick={handleClose} className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition" />
@@ -495,7 +504,7 @@ export default function ChatWindow() {
           </div>
           
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-white truncate">{displayName}</p>
+            <p className="text-[13px] font-medium text-white truncate">{displayName}</p>
             {!room?.is_self && memberCount > 0 && (
               <button 
                 onClick={() => setShowMembersModal(true)}
@@ -541,13 +550,13 @@ export default function ChatWindow() {
 
       {/* 검색창 */}
       {showSearch && (
-        <div className="px-3 py-2 bg-[#494949] flex-shrink-0">
+        <div className="px-3 py-2 bg-[#666666] flex-shrink-0">
           <input
             type="text"
             placeholder="대화 내용 검색..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-white/10 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:ring-1 focus:ring-white/30"
+            className="w-full px-3 py-2 text-[13px] bg-white/10 text-white placeholder-gray-400 rounded-lg focus:outline-none focus:ring-1 focus:ring-white/30"
             autoFocus
           />
         </div>
@@ -568,14 +577,24 @@ export default function ChatWindow() {
             const unreadCount = getUnreadCount(msg)
             
             const prevMsg = index > 0 ? filteredMessages[index - 1] : null
+            const nextMsg = index < filteredMessages.length - 1 ? filteredMessages[index + 1] : null
             const isSameSender = prevMsg && prevMsg.sender_id === msg.sender_id && prevMsg.content_type !== 'system'
             const showProfile = !isMe && !room?.is_self && !isSameSender && !isSystem
+            
+            // 시간 표시 여부: 다음 메시지가 없거나, 다음 메시지가 다른 발신자거나, 1분 이상 차이나면 표시
+            const msgTime = new Date(msg.created_at)
+            const nextMsgTime = nextMsg ? new Date(nextMsg.created_at) : null
+            const isSameMinute = nextMsgTime && 
+              msgTime.getHours() === nextMsgTime.getHours() && 
+              msgTime.getMinutes() === nextMsgTime.getMinutes()
+            const isNextSameSender = nextMsg && nextMsg.sender_id === msg.sender_id && nextMsg.content_type !== 'system'
+            const showTime = !nextMsg || !isNextSameSender || !isSameMinute
             
             // 시스템 메시지 (나갔습니다 등)
             if (isSystem) {
               return (
                 <div key={msg.id} className="flex justify-center my-2">
-                  <span className="px-3 py-1 text-xs text-gray-400 bg-gray-700/50 rounded-full">
+                  <span className="px-3 py-1 text-xs text-gray-300 bg-gray-600/50 rounded-full">
                     {msg.content}
                   </span>
                 </div>
@@ -588,8 +607,8 @@ export default function ChatWindow() {
                 {!isMe && !room?.is_self && (
                   <div className="w-9 flex-shrink-0 mr-2">
                     {showProfile && (
-                      <div className="w-9 h-9 bg-gray-300 rounded-full flex items-center justify-center">
-                        <svg className="w-5 h-5 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
+                      <div className="w-9 h-9 bg-gray-400 rounded-full flex items-center justify-center">
+                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
                           <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                         </svg>
                       </div>
@@ -617,19 +636,26 @@ export default function ChatWindow() {
                     )}
                     
                     {/* 내 메시지: 읽음 표시 + 시간 */}
-                    {isMe && (
-                      <div className="flex flex-col items-end justify-end mb-0.5">
+                    {isMe && showTime && (
+                      <div className="flex flex-col items-end justify-end">
                         {unreadCount > 0 && (
-                          <span className="text-xs text-yellow-400 font-medium">{unreadCount}</span>
+                          <span className="text-[10px] text-[#6d83a9] font-medium">{unreadCount}</span>
                         )}
-                        <span className="text-xs text-gray-400">{formatTime(msg.created_at)}</span>
+                        <span className="text-[10px] text-gray-400">{formatTime(msg.created_at)}</span>
+                      </div>
+                    )}
+                    
+                    {/* 내 메시지: 읽음 표시만 (시간 안 보일 때) */}
+                    {isMe && !showTime && unreadCount > 0 && (
+                      <div className="flex flex-col items-end justify-end">
+                        <span className="text-[10px] text-[#6d83a9] font-medium">{unreadCount}</span>
                       </div>
                     )}
                     
                     <div>
                       {/* 답장 표시 */}
                       {replyMsg && (
-                        <div className={`text-xs px-2 py-1 mb-1 rounded ${isMe ? 'bg-blue-300/50 text-gray-800' : 'bg-gray-200 text-gray-600'}`}>
+                        <div className={`text-xs px-2 py-1 mb-1 rounded ${isMe ? 'bg-[#7eb8e7]/50 text-gray-800' : 'bg-gray-200 text-gray-600'}`}>
                           <span className="font-medium">{replyMsg.sender?.name || '알 수 없음'}</span>에게 답장
                           <p className="truncate">{replyMsg.content}</p>
                         </div>
@@ -638,31 +664,83 @@ export default function ChatWindow() {
                       {isFile ? (
                         <button
                           onClick={() => openFilePath(msg.content)}
-                          className={`px-3 py-2 text-sm flex items-center gap-2 ${
+                          className={`relative px-2.5 py-1.5 text-sm flex items-center gap-2 ${
                             isMe 
-                              ? 'bg-[#aacbec] text-gray-900 rounded-lg rounded-br-sm' 
-                              : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
+                              ? 'bg-[#aacbec] text-gray-900 rounded' 
+                              : 'bg-white text-gray-900 rounded'
                           }`}
                         >
+                          {/* 꼬리 */}
+                          {isMe ? (
+                            <span 
+                              className="absolute bottom-2"
+                              style={{
+                                right: '-6px',
+                                width: 0,
+                                height: 0,
+                                borderTop: '6px solid transparent',
+                                borderBottom: '6px solid transparent',
+                                borderLeft: '6px solid #aacbec',
+                              }}
+                            />
+                          ) : (
+                            <span 
+                              className="absolute bottom-2"
+                              style={{
+                                left: '-6px',
+                                width: 0,
+                                height: 0,
+                                borderTop: '6px solid transparent',
+                                borderBottom: '6px solid transparent',
+                                borderRight: '6px solid white',
+                              }}
+                            />
+                          )}
                           <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                           </svg>
                           <span className="underline break-all">{msg.content.split(/[/\\]/).pop() || msg.content}</span>
                         </button>
                       ) : (
-                        <div className={`px-3 py-2 text-sm whitespace-pre-wrap break-all ${
+                        <div className={`relative px-2.5 py-1.5 text-sm whitespace-pre-wrap break-all ${
                           isMe 
-                            ? 'bg-[#aacbec] text-gray-900 rounded-lg rounded-br-sm' 
-                            : 'bg-white text-gray-900 rounded-lg rounded-bl-sm'
+                            ? 'bg-[#aacbec] text-gray-900 rounded' 
+                            : 'bg-white text-gray-900 rounded'
                         }`}>
+                          {/* 꼬리 */}
+                          {isMe ? (
+                            <span 
+                              className="absolute bottom-2"
+                              style={{
+                                right: '-6px',
+                                width: 0,
+                                height: 0,
+                                borderTop: '6px solid transparent',
+                                borderBottom: '6px solid transparent',
+                                borderLeft: '6px solid #aacbec',
+                              }}
+                            />
+                          ) : (
+                            <span 
+                              className="absolute bottom-2"
+                              style={{
+                                left: '-6px',
+                                width: 0,
+                                height: 0,
+                                borderTop: '6px solid transparent',
+                                borderBottom: '6px solid transparent',
+                                borderRight: '6px solid white',
+                              }}
+                            />
+                          )}
                           {renderMessageContent(msg.content)}
                         </div>
                       )}
                     </div>
                     
                     {/* 상대방 메시지: 시간 */}
-                    {!isMe && (
-                      <span className="text-xs text-gray-400 self-end mb-0.5">{formatTime(msg.created_at)}</span>
+                    {!isMe && showTime && (
+                      <span className="text-[10px] text-gray-400 self-end">{formatTime(msg.created_at)}</span>
                     )}
                     
                     {/* 답장 버튼 (상대방 메시지) */}
@@ -687,9 +765,9 @@ export default function ChatWindow() {
 
       {/* 답장 표시 */}
       {replyTo && (
-        <div className="px-3 py-2 bg-[#3a3a3a] flex items-center justify-between">
+        <div className="px-3 py-2 bg-[#444444] flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-blue-400">{replyTo.sender?.name || '알 수 없음'}에게 답장</p>
+            <p className="text-xs text-[#7eb8e7]">{replyTo.sender?.name || '알 수 없음'}에게 답장</p>
             <p className="text-xs text-gray-400 truncate">{replyTo.content}</p>
           </div>
           <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-white ml-2">
@@ -702,7 +780,7 @@ export default function ChatWindow() {
 
       {/* 멘션 리스트 */}
       {showMentionList && filteredMentionMembers.length > 0 && (
-        <div className="px-3 py-2 bg-[#3a3a3a] border-t border-gray-600">
+        <div className="px-3 py-2 bg-[#444444] border-t border-gray-600">
           <p className="text-xs text-gray-400 mb-1">멤버 선택</p>
           <div className="flex flex-wrap gap-1">
             {filteredMentionMembers.map(member => (
@@ -726,7 +804,7 @@ export default function ChatWindow() {
           onChange={handleMessageChange}
           onKeyDown={handleKeyDown}
           placeholder={room?.is_self ? '메모 입력...' : '메시지 입력... (@로 멘션)'}
-          className="w-full px-3 py-2 text-sm bg-white focus:outline-none resize-none border-0"
+          className="w-full px-3 py-2 text-[13px] bg-white focus:outline-none resize-none border-0"
           style={{ height: '80px' }}
         />
         
@@ -742,9 +820,9 @@ export default function ChatWindow() {
           
           <button
             onClick={handleSend}
-            disabled={!newMessage.trim()}
+            disabled={!newMessage.trim() || isSending}
             className={`w-8 h-8 rounded-full flex items-center justify-center transition ${
-              newMessage.trim() 
+              newMessage.trim() && !isSending
                 ? 'bg-[#5b9bd5] text-white hover:bg-[#4a8bc5]' 
                 : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
@@ -769,7 +847,7 @@ export default function ChatWindow() {
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => setShowNewPostModal(true)}
-                  className="text-blue-500 text-sm hover:underline"
+                  className="text-blue-500 text-[13px] hover:underline"
                 >
                   글쓰기
                 </button>
@@ -779,16 +857,16 @@ export default function ChatWindow() {
             
             <div className="flex-1 overflow-y-auto">
               {boardPosts.length === 0 ? (
-                <p className="text-center text-gray-400 text-sm py-8">게시글이 없습니다</p>
+                <p className="text-center text-gray-400 text-[13px] py-8">게시글이 없습니다</p>
               ) : (
                 boardPosts.map(post => (
                   <div key={post.id} className={`p-3 border-b hover:bg-gray-50 ${post.is_important ? 'bg-yellow-50' : ''}`}>
                     <div className="flex items-start gap-2">
                       {post.is_important && (
-                        <span className="text-yellow-500 text-sm flex-shrink-0">📌</span>
+                        <span className="text-yellow-500 text-[13px] flex-shrink-0">📌</span>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-800">{post.title}</p>
+                        <p className="text-[13px] font-medium text-gray-800">{post.title}</p>
                         <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{post.content}</p>
                         <p className="text-xs text-gray-400 mt-1">
                           {post.author?.name || '알 수 없음'} · {formatDate(post.created_at)}
@@ -839,14 +917,14 @@ export default function ChatWindow() {
               value={newPostTitle}
               onChange={(e) => setNewPostTitle(e.target.value)}
               placeholder="제목"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2"
+              className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2"
             />
             
             <textarea
               value={newPostContent}
               onChange={(e) => setNewPostContent(e.target.value)}
               placeholder="내용"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 resize-none"
+              className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 resize-none"
               rows={4}
             />
             
@@ -857,20 +935,20 @@ export default function ChatWindow() {
                 onChange={(e) => setNewPostImportant(e.target.checked)}
                 className="w-4 h-4 rounded border-gray-300 text-blue-500 focus:ring-blue-500"
               />
-              <span className="text-sm text-gray-700">📌 중요 글로 등록</span>
+              <span className="text-[13px] text-gray-700">📌 중요 글로 등록</span>
             </label>
             
             <div className="flex gap-2">
               <button
                 onClick={() => setShowNewPostModal(false)}
-                className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+                className="flex-1 py-2 text-[13px] text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
               >
                 취소
               </button>
               <button
                 onClick={handleCreatePost}
                 disabled={!newPostTitle.trim() || !newPostContent.trim()}
-                className="flex-1 py-2 text-sm text-white bg-[#5b9bd5] rounded-lg hover:bg-[#4a8bc5] disabled:opacity-50"
+                className="flex-1 py-2 text-[13px] text-white bg-[#5b9bd5] rounded-lg hover:bg-[#4a8bc5] disabled:opacity-50"
               >
                 작성
               </button>
@@ -900,7 +978,7 @@ export default function ChatWindow() {
                       <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                     </svg>
                   </div>
-                  <p className="text-sm text-gray-800">
+                  <p className="text-[13px] text-gray-800">
                     {member.id === user.id ? `${member.name || member.email?.split('@')[0]} (나)` : member.name || member.email?.split('@')[0]}
                   </p>
                 </div>
@@ -924,7 +1002,7 @@ export default function ChatWindow() {
             </div>
             
             {availableMembers.length === 0 ? (
-              <p className="text-center text-gray-400 text-sm py-4">초대할 수 있는 멤버가 없습니다</p>
+              <p className="text-center text-gray-400 text-[13px] py-4">초대할 수 있는 멤버가 없습니다</p>
             ) : (
               <div className="space-y-1 max-h-52 overflow-y-auto">
                 {availableMembers.map(member => (
@@ -933,13 +1011,13 @@ export default function ChatWindow() {
                     onClick={() => handleInviteMember(member.id)}
                     className="flex items-center gap-2 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
                   >
-                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-sm">
+                    <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center text-[13px]">
                       <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                       </svg>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800 truncate">{member.name || member.email?.split('@')[0]}</p>
+                      <p className="text-[13px] text-gray-800 truncate">{member.name || member.email?.split('@')[0]}</p>
                     </div>
                     <span className="text-xs text-blue-500">초대</span>
                   </div>
@@ -970,21 +1048,21 @@ export default function ChatWindow() {
               value={filePath}
               onChange={(e) => setFilePath(e.target.value)}
               placeholder="예: \\nas\공유폴더\파일.pdf"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-3"
+              className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-3"
               autoFocus
             />
             
             <div className="flex gap-2">
               <button
                 onClick={() => setShowFileModal(false)}
-                className="flex-1 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+                className="flex-1 py-2 text-[13px] text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
               >
                 취소
               </button>
               <button
                 onClick={handleSendFile}
                 disabled={!filePath.trim()}
-                className="flex-1 py-2 text-sm text-white bg-[#5b9bd5] rounded-lg hover:bg-[#4a8bc5] disabled:opacity-50"
+                className="flex-1 py-2 text-[13px] text-white bg-[#5b9bd5] rounded-lg hover:bg-[#4a8bc5] disabled:opacity-50"
               >
                 전송
               </button>
