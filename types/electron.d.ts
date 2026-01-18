@@ -12,6 +12,8 @@ declare global {
       onLogout: () => void
       onLogin: () => void
       showNotification: (title: string, body: string) => void
+      selectFile: () => Promise<string | null>
+      openPath: (filePath: string) => void
     }
   }
 }

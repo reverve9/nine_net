@@ -454,8 +454,13 @@ export default function ChatWindow() {
     window.electronAPI?.minimizeWindow?.()
   }
 
-  const openFilePath = (path: string) => {
-    alert(`파일 경로: ${path}\n\n이 경로를 파일 탐색기에서 열어주세요.`)
+  const openFilePath = (filePath: string) => {
+    if (window.electronAPI?.openPath) {
+      window.electronAPI.openPath(filePath)
+    } else {
+      // 웹에서는 경로만 보여줌
+      alert(`파일 경로: ${filePath}\n\n이 경로를 파일 탐색기에서 열어주세요.`)
+    }
   }
 
   const formatTime = (dateString: string) => {
@@ -1183,14 +1188,27 @@ export default function ChatWindow() {
             
             <p className="text-xs text-gray-500 mb-2">NAS 또는 공유 폴더 경로를 입력하세요</p>
             
-            <input
-              type="text"
-              value={filePath}
-              onChange={(e) => setFilePath(e.target.value)}
-              placeholder="예: \\nas\공유폴더\파일.pdf"
-              className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-3"
-              autoFocus
-            />
+            <div className="flex gap-2 mb-3">
+              <input
+                type="text"
+                value={filePath}
+                onChange={(e) => setFilePath(e.target.value)}
+                placeholder="예: \\nas\공유폴더\파일.pdf"
+                className="flex-1 px-3 py-2 text-[13px] text-gray-900 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300"
+                autoFocus
+              />
+              {isElectron && (
+                <button
+                  onClick={async () => {
+                    const selected = await window.electronAPI?.selectFile()
+                    if (selected) setFilePath(selected)
+                  }}
+                  className="px-3 py-2 text-[13px] text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 whitespace-nowrap"
+                >
+                  찾아보기
+                </button>
+              )}
+            </div>
             
             <div className="flex gap-2">
               <button

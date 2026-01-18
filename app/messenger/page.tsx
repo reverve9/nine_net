@@ -24,6 +24,7 @@ interface Member {
   is_online?: boolean
   last_seen?: string
   role?: string
+  avatar_url?: string
 }
 
 type TabType = 'members' | 'chats' | 'settings'
@@ -85,6 +86,8 @@ export default function MessengerMain() {
   const [contextMenu, setContextMenu] = useState<ContextMenu>({ show: false, x: 0, y: 0, roomId: '', isSelf: false })
   const [pinnedRooms, setPinnedRooms] = useState<string[]>([])
   const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS)
+  const [showProfileModal, setShowProfileModal] = useState(false)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   // 설정 로드
   useEffect(() => {
@@ -536,6 +539,48 @@ export default function MessengerMain() {
     window.location.href = '/'
   }
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+    
+    setUploadingAvatar(true)
+    
+    try {
+      // 파일 확장자
+      const ext = file.name.split('.').pop()
+      const fileName = `${user.id}_${Date.now()}.${ext}`
+      
+      // 새 파일 업로드
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, file)
+      
+      if (uploadError) throw uploadError
+      
+      // Public URL 가져오기
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName)
+      
+      // 프로필 업데이트
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', user.id)
+      
+      if (updateError) throw updateError
+      
+      // 로컬 상태 업데이트
+      setProfile(prev => prev ? { ...prev, avatar_url: publicUrl } : null)
+      
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      alert('프로필 사진 업로드 실패: ' + error.message)
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
   const handleClose = () => {
     window.electronAPI?.closeWindow?.()
   }
@@ -657,20 +702,24 @@ export default function MessengerMain() {
           {/* 멤버 리스트 */}
           {activeTab === 'members' && (
             <div>
-              {/* 나 - 클릭하면 나와의 채팅 */}
+              {/* 나 - 클릭하면 프로필 편집 모달 */}
               <div 
                 className="flex items-center gap-2.5 px-3 py-2.5 hover:bg-gray-50 cursor-pointer"
-                onClick={openSelfChat}
+                onClick={() => setShowProfileModal(true)}
               >
                 <div className="relative flex-shrink-0">
-                  <div className="w-11 h-11 bg-blue-100 rounded-full flex items-center justify-center text-lg">👤</div>
+                  {profile?.avatar_url ? (
+                    <img src={profile.avatar_url} alt="프로필" className="w-11 h-11 rounded-full object-cover" />
+                  ) : (
+                    <div className="w-11 h-11 bg-blue-100 rounded-full flex items-center justify-center text-lg">👤</div>
+                  )}
                   <div className="absolute -bottom-0.5 -right-0.5 p-0.5 bg-white rounded-full">
                     <StatusDot isOnline={true} />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-800 truncate">{profile?.name || user.email?.split('@')[0]}</p>
-                  <p className="text-xs text-gray-400 truncate">나와의 채팅</p>
+                  <p className="text-xs text-gray-400 truncate">프로필 편집</p>
                 </div>
               </div>
 
@@ -686,7 +735,11 @@ export default function MessengerMain() {
                     onClick={() => startDirectChat(member)}
                   >
                     <div className="relative flex-shrink-0">
-                      <div className="w-11 h-11 bg-gray-200 rounded-full flex items-center justify-center text-lg">👤</div>
+                      {member.avatar_url ? (
+                        <img src={member.avatar_url} alt="프로필" className="w-11 h-11 rounded-full object-cover" />
+                      ) : (
+                        <div className="w-11 h-11 bg-gray-200 rounded-full flex items-center justify-center text-lg">👤</div>
+                      )}
                       <div className="absolute -bottom-0.5 -right-0.5 p-0.5 bg-white rounded-full">
                         <StatusDot isOnline={member.is_online} />
                       </div>
@@ -920,6 +973,67 @@ export default function MessengerMain() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* 프로필 편집 모달 */}
+      {showProfileModal && (
+        <div 
+          className="fixed inset-0 bg-black/30 flex items-center justify-center" 
+          style={{ zIndex: 99999 }}
+          onClick={() => setShowProfileModal(false)}
+        >
+          <div className="bg-white rounded-xl p-5 w-[320px] shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-medium text-gray-800">프로필 편집</p>
+              <button onClick={() => setShowProfileModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            
+            {/* 프로필 사진 */}
+            <div className="flex flex-col items-center mb-4">
+              <label className="relative cursor-pointer group">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="프로필" className="w-20 h-20 rounded-full object-cover" />
+                ) : (
+                  <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center text-3xl">👤</div>
+                )}
+                <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                  <span className="text-white text-xs">변경</span>
+                </div>
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                  disabled={uploadingAvatar}
+                />
+              </label>
+              {uploadingAvatar && <p className="text-xs text-gray-400 mt-2">업로드 중...</p>}
+            </div>
+            
+            {/* 이름 */}
+            <div className="mb-3">
+              <p className="text-xs text-gray-500 mb-1">이름</p>
+              <p className="text-sm text-gray-800">{profile?.name || user.email?.split('@')[0]}</p>
+            </div>
+            
+            {/* 이메일 */}
+            <div className="mb-4">
+              <p className="text-xs text-gray-500 mb-1">이메일</p>
+              <p className="text-sm text-gray-800">{user.email}</p>
+            </div>
+            
+            {/* 나와의 채팅 버튼 */}
+            <button
+              onClick={() => {
+                setShowProfileModal(false)
+                openSelfChat()
+              }}
+              className="w-full py-2 text-sm text-blue-500 bg-blue-50 rounded-lg hover:bg-blue-100 transition"
+            >
+              나와의 채팅
+            </button>
+          </div>
         </div>
       )}
     </div>

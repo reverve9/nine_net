@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, Tray, Menu, screen, ipcMain, Notification } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, screen, ipcMain, Notification, dialog } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
@@ -229,6 +229,26 @@ ipcMain.on('user-logout', () => {
 // 로그인 이벤트 - 메신저/채팅창 새로고침
 ipcMain.on('user-login', () => {
   broadcastAuthChange();
+});
+
+// 파일 선택 다이얼로그
+ipcMain.handle('select-file', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, {
+    properties: ['openFile'],
+    title: '파일 선택',
+  });
+  
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  
+  return result.filePaths[0];
+});
+
+// 파일 경로 열기 (Finder/Explorer)
+ipcMain.on('open-path', (event, filePath) => {
+  shell.showItemInFolder(filePath);
 });
 
 autoUpdater.on('update-available', () => {
