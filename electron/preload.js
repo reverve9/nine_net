@@ -10,4 +10,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 인증 관련
   onLogout: () => ipcRenderer.send('user-logout'),
   onLogin: () => ipcRenderer.send('user-login'),
+  // 알림
+  showNotification: (title, body) => ipcRenderer.send('show-notification', { title, body }),
 });

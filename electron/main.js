@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, Tray, Menu, screen, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, screen, ipcMain, Notification } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
 
@@ -59,7 +59,7 @@ function createMessengerWindow() {
     y: 80,
     movable: true,
     resizable: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     frame: false,
     transparent: false,
     webPreferences: {
@@ -98,7 +98,7 @@ function createChatWindow(roomId, roomName) {
     y: 120 + offset,
     movable: true,
     resizable: true,
-    alwaysOnTop: true,
+    alwaysOnTop: false,
     frame: false,
     transparent: false,
     webPreferences: {
@@ -197,6 +197,28 @@ ipcMain.on('close-window', (event) => {
 ipcMain.on('minimize-window', (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   if (win) win.minimize();
+});
+
+// 알림 표시
+ipcMain.on('show-notification', (event, { title, body }) => {
+  if (Notification.isSupported()) {
+    const notification = new Notification({
+      title: title,
+      body: body,
+      silent: false, // 시스템 알림음 사용
+    });
+    
+    notification.on('click', () => {
+      // 알림 클릭 시 해당 창 포커스
+      const win = BrowserWindow.fromWebContents(event.sender);
+      if (win) {
+        win.show();
+        win.focus();
+      }
+    });
+    
+    notification.show();
+  }
 });
 
 // 로그아웃 이벤트 - 모든 메신저/채팅창 닫기

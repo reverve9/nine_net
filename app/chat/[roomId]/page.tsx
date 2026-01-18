@@ -41,29 +41,6 @@ interface BoardPost {
   author?: { name: string }
 }
 
-const renderMessageContent = (content: string) => {
-  const urlRegex = /(https?:\/\/[^\s]+)/g
-  const parts = content.split(urlRegex)
-  
-  return parts.map((part, index) => {
-    if (urlRegex.test(part)) {
-      return (
-        <a 
-          key={index}
-          href={part}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="underline hover:opacity-80"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {part}
-        </a>
-      )
-    }
-    return part
-  })
-}
-
 export default function ChatWindow() {
   const params = useParams()
   const roomId = params.roomId as string
@@ -79,22 +56,61 @@ export default function ChatWindow() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [showMembersModal, setShowMembersModal] = useState(false)
-  const [showBoardModal, setShowBoardModal] = useState(false)
+  const [showBoardDropdown, setShowBoardDropdown] = useState(false)
   const [showNewPostModal, setShowNewPostModal] = useState(false)
   const [allMembers, setAllMembers] = useState<Member[]>([])
   const [roomMembers, setRoomMembers] = useState<Member[]>([])
   const [showFileModal, setShowFileModal] = useState(false)
   const [filePath, setFilePath] = useState('')
   const [boardPosts, setBoardPosts] = useState<BoardPost[]>([])
-  const [newPostTitle, setNewPostTitle] = useState('')
   const [newPostContent, setNewPostContent] = useState('')
   const [newPostImportant, setNewPostImportant] = useState(false)
   const [replyTo, setReplyTo] = useState<Message | null>(null)
   const [showMentionList, setShowMentionList] = useState(false)
   const [mentionFilter, setMentionFilter] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [chatSettings, setChatSettings] = useState({
+    bgColor: '#666666',
+    bgOpacity: 100,
+    fontFamily: 'system',
+    fontSize: 14,
+    fontWeight: 'normal',
+  })
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 설정 로드
+  useEffect(() => {
+    const loadSettings = () => {
+      try {
+        const saved = localStorage.getItem('chatSettings')
+        console.log('Chat loading settings:', saved)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          console.log('Chat parsed settings:', parsed)
+          setChatSettings(prev => ({ ...prev, ...parsed }))
+        }
+      } catch (e) {
+        console.error('Failed to load chat settings:', e)
+      }
+    }
+    loadSettings()
+    
+    // 주기적으로 설정 체크 (메신저에서 변경 시 반영)
+    const interval = setInterval(loadSettings, 1000)
+    
+    // storage 변경 감지 (다른 창에서 설정 변경 시)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'chatSettings') {
+        loadSettings()
+      }
+    }
+    window.addEventListener('storage', handleStorage)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('storage', handleStorage)
+    }
+  }, [])
 
   useEffect(() => { 
     checkAuth()
@@ -139,6 +155,31 @@ export default function ChatWindow() {
             
             if (newMsg.sender_id !== user.id) {
               markMessageAsRead(newMsg.id)
+              
+              // 알림 보내기 (설정 확인)
+              try {
+                const savedSettings = localStorage.getItem('chatSettings')
+                const settings = savedSettings ? JSON.parse(savedSettings) : { notificationEnabled: true }
+                
+                if (settings.notificationEnabled) {
+                  const senderName = sender?.name || '알 수 없음'
+                  const msgContent = newMsg.content_type === 'file' ? '📎 파일을 보냈습니다' : newMsg.content
+                  
+                  // Electron 알림
+                  if (window.electronAPI?.showNotification) {
+                    window.electronAPI.showNotification(senderName, msgContent)
+                  } else {
+                    // 웹 알림 (Electron 아닐 때)
+                    if (Notification.permission === 'granted') {
+                      new Notification(senderName, { body: msgContent })
+                    } else if (Notification.permission !== 'denied') {
+                      Notification.requestPermission()
+                    }
+                  }
+                }
+              } catch (e) {
+                console.error('Notification error:', e)
+              }
             }
           }
         )
@@ -378,16 +419,16 @@ export default function ChatWindow() {
   }
 
   const handleCreatePost = async () => {
-    if (!newPostTitle.trim() || !newPostContent.trim()) return
+    if (!newPostContent.trim()) return
     await supabase.from('board_posts').insert({
-      title: newPostTitle.trim(),
+      title: '',
       content: newPostContent.trim(),
       author_id: user.id,
       room_id: roomId,
       is_important: newPostImportant,
     })
     
-    setNewPostTitle('')
+    setNewPostContent('')
     setNewPostContent('')
     setNewPostImportant(false)
     setShowNewPostModal(false)
@@ -462,9 +503,96 @@ export default function ChatWindow() {
       ? otherMembers.map(m => m.name || m.email?.split('@')[0]).join(', ')
       : '대화 상대 없음'
 
+  // 폰트 패밀리 매핑 (영문/숫자용)
+  const getEnFontFamily = () => {
+    const fontMap: Record<string, string> = {
+      'system': '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      'Pretendard': '"Pretendard", -apple-system, sans-serif',
+      'NanumGothic': '"Nanum Gothic", sans-serif',
+      'NotoSansKR': '"Noto Sans KR", sans-serif',
+    }
+    return fontMap[chatSettings.fontFamily] || fontMap['system']
+  }
+
+  // 폰트 웨이트 매핑
+  const getFontWeight = () => {
+    const weightMap: Record<string, number> = {
+      'thin': 300,
+      'normal': 400,
+      'bold': 600,
+    }
+    return weightMap[chatSettings.fontWeight] || 400
+  }
+
+  // 메시지 텍스트 스타일 (영문/숫자만 폰트 적용)
+  const getMessageStyle = () => ({
+    fontSize: `${chatSettings.fontSize}px`,
+  })
+
+  // 영문/숫자 감싸는 스타일 (폰트 패밀리만)
+  const enStyle = {
+    fontFamily: getEnFontFamily(),
+  }
+
+  // 메시지 내용 렌더링 (영문/숫자에만 폰트 패밀리 적용, 웨이트는 전체)
+  const renderMessageContent = (content: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    const parts = content.split(urlRegex)
+    
+    return parts.map((part, index) => {
+      if (urlRegex.test(part)) {
+        return (
+          <a 
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline hover:opacity-80"
+            style={enStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        )
+      }
+      // 영문/숫자와 한글 분리해서 폰트 패밀리만 적용
+      const segments = part.split(/([a-zA-Z0-9\s.,!?@#$%^&*()_+\-=\[\]{}|;:'",.<>\/\\]+)/g)
+      return segments.map((seg, i) => {
+        if (/^[a-zA-Z0-9\s.,!?@#$%^&*()_+\-=\[\]{}|;:'",.<>\/\\]+$/.test(seg)) {
+          return <span key={`${index}-${i}`} style={enStyle}>{seg}</span>
+        }
+        return <span key={`${index}-${i}`}>{seg}</span>
+      })
+    })
+  }
+
+  // 배경색 밝기 계산 (0~255, 높을수록 밝음)
+  const getBrightness = (hex: string) => {
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    return (r * 299 + g * 587 + b * 114) / 1000
+  }
+
+  // 배경이 밝은지 여부
+  const isLightBg = getBrightness(chatSettings.bgColor) > 128
+
+  // 텍스트 색상 (배경에 따라)
+  const textColor = isLightBg ? '#1f2937' : '#ffffff'
+  const textColorMuted = isLightBg ? '#6b7280' : '#9ca3af'
+  const textColorFaint = isLightBg ? '#9ca3af' : '#6b7280'
+
+  // 내 메시지 박스 색상
+  const myMsgBg = isLightBg ? '#3b82f6' : '#aacbec'
+  const myMsgText = isLightBg ? '#ffffff' : '#1f2937'
+
+  // 상대방 메시지 박스 색상  
+  const otherMsgBg = isLightBg ? '#f3f4f6' : '#ffffff'
+  const otherMsgText = '#1f2937'
+
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-[#666666]">
+      <div className="h-screen flex items-center justify-center" style={{ backgroundColor: chatSettings.bgColor }}>
         <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
       </div>
     )
@@ -472,18 +600,25 @@ export default function ChatWindow() {
 
   if (!user) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center bg-[#666666] p-4">
-        <p className="text-gray-300 text-xs">로그인이 필요합니다</p>
+      <div className="h-screen flex flex-col items-center justify-center p-4" style={{ backgroundColor: chatSettings.bgColor }}>
+        <p style={{ color: textColorMuted }} className="text-xs">로그인이 필요합니다</p>
       </div>
     )
   }
 
   return (
-    <div className="h-screen flex flex-col bg-[#666666] overflow-hidden">
+    <div 
+      className="h-screen flex flex-col"
+      style={{ 
+        backgroundColor: chatSettings.bgColor,
+        fontSize: `${chatSettings.fontSize}px`,
+        color: textColor,
+      }}
+    >
       {/* 헤더 */}
       <div 
-        className="bg-[#666666] flex-shrink-0 px-3 py-2"
-        style={{ WebkitAppRegion: 'drag' } as any}
+        className="flex-shrink-0 px-3 py-2"
+        style={{ backgroundColor: chatSettings.bgColor, WebkitAppRegion: 'drag' } as any}
       >
         <div className="flex items-center justify-between mb-[10px] min-h-[16px]">
           {isElectron && (
@@ -526,7 +661,7 @@ export default function ChatWindow() {
             </button>
             
             <button
-              onClick={() => setShowBoardModal(true)}
+              onClick={() => setShowBoardDropdown(!showBoardDropdown)}
               className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
@@ -548,9 +683,73 @@ export default function ChatWindow() {
         </div>
       </div>
 
+      {/* 게시판 드롭다운 (카카오톡 공지 스타일) */}
+      {boardPosts.length > 0 && (
+        <div className="bg-white flex-shrink-0 border-b border-gray-200">
+          {/* 접힌 상태: 최신 글 1개만 */}
+          <div 
+            className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50"
+            onClick={() => setShowBoardDropdown(!showBoardDropdown)}
+          >
+            <svg className="w-4 h-4 text-[#5b9bd5] flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+            </svg>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500">{boardPosts[0].author?.name || '알 수 없음'}</p>
+              <p className="text-sm text-gray-800 truncate">{boardPosts[0].content}</p>
+            </div>
+            <svg className={`w-4 h-4 text-gray-400 transition-transform ${showBoardDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+          
+          {/* 펼친 상태: 전체 목록 */}
+          {showBoardDropdown && (
+            <div className="max-h-48 overflow-y-auto border-t border-gray-100">
+              {boardPosts.map((post, index) => (
+                <div 
+                  key={post.id} 
+                  className={`flex items-center gap-2 px-3 py-2 ${index > 0 ? 'border-t border-gray-100' : ''} hover:bg-gray-50`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-gray-500">{post.author?.name || '알 수 없음'}</p>
+                    <p className="text-sm text-gray-800 truncate">{post.content}</p>
+                  </div>
+                  {post.author_id === user.id && (
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleToggleImportant(post.id, post.is_important); }}
+                        className={`p-1 rounded ${post.is_important ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'}`}
+                      >
+                        📌
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeletePost(post.id); }}
+                        className="p-1 text-gray-400 hover:text-red-500"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {/* 글쓰기 버튼 */}
+              <button
+                onClick={() => setShowNewPostModal(true)}
+                className="w-full py-2 text-sm text-[#5b9bd5] hover:bg-gray-50 border-t border-gray-100"
+              >
+                + 새 글 작성
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 검색창 */}
       {showSearch && (
-        <div className="px-3 py-2 bg-[#666666] flex-shrink-0">
+        <div className="px-3 py-2 flex-shrink-0" style={{ backgroundColor: chatSettings.bgColor }}>
           <input
             type="text"
             placeholder="대화 내용 검색..."
@@ -639,23 +838,29 @@ export default function ChatWindow() {
                     {isMe && showTime && (
                       <div className="flex flex-col items-end justify-end">
                         {unreadCount > 0 && (
-                          <span className="text-[10px] text-[#6d83a9] font-medium">{unreadCount}</span>
+                          <span className="text-[10px] font-medium" style={{ color: isLightBg ? '#3b82f6' : '#6d83a9' }}>{unreadCount}</span>
                         )}
-                        <span className="text-[10px] text-gray-400">{formatTime(msg.created_at)}</span>
+                        <span className="text-[10px]" style={{ color: textColorMuted }}>{formatTime(msg.created_at)}</span>
                       </div>
                     )}
                     
                     {/* 내 메시지: 읽음 표시만 (시간 안 보일 때) */}
                     {isMe && !showTime && unreadCount > 0 && (
                       <div className="flex flex-col items-end justify-end">
-                        <span className="text-[10px] text-[#6d83a9] font-medium">{unreadCount}</span>
+                        <span className="text-[10px] font-medium" style={{ color: isLightBg ? '#3b82f6' : '#6d83a9' }}>{unreadCount}</span>
                       </div>
                     )}
                     
                     <div>
                       {/* 답장 표시 */}
                       {replyMsg && (
-                        <div className={`text-xs px-2 py-1 mb-1 rounded ${isMe ? 'bg-[#7eb8e7]/50 text-gray-800' : 'bg-gray-200 text-gray-600'}`}>
+                        <div 
+                          className="text-xs px-2 py-1 mb-1 rounded"
+                          style={{ 
+                            backgroundColor: isMe ? (isLightBg ? '#bfdbfe' : '#7eb8e7') : (isLightBg ? '#e5e7eb' : '#d1d5db'),
+                            color: '#374151'
+                          }}
+                        >
                           <span className="font-medium">{replyMsg.sender?.name || '알 수 없음'}</span>에게 답장
                           <p className="truncate">{replyMsg.content}</p>
                         </div>
@@ -664,11 +869,13 @@ export default function ChatWindow() {
                       {isFile ? (
                         <button
                           onClick={() => openFilePath(msg.content)}
-                          className={`relative px-2.5 py-1.5 text-sm flex items-center gap-2 ${
-                            isMe 
-                              ? 'bg-[#aacbec] text-gray-900 rounded' 
-                              : 'bg-white text-gray-900 rounded'
-                          }`}
+                          className="relative px-2.5 py-1.5 flex items-center gap-2 rounded"
+                          style={{
+                            backgroundColor: isMe ? myMsgBg : otherMsgBg,
+                            color: isMe ? myMsgText : otherMsgText,
+                            fontSize: `${chatSettings.fontSize}px`,
+                            fontWeight: getFontWeight(),
+                          }}
                         >
                           {/* 꼬리 */}
                           {isMe ? (
@@ -680,7 +887,7 @@ export default function ChatWindow() {
                                 height: 0,
                                 borderTop: '6px solid transparent',
                                 borderBottom: '6px solid transparent',
-                                borderLeft: '6px solid #aacbec',
+                                borderLeft: `6px solid ${myMsgBg}`,
                               }}
                             />
                           ) : (
@@ -692,7 +899,7 @@ export default function ChatWindow() {
                                 height: 0,
                                 borderTop: '6px solid transparent',
                                 borderBottom: '6px solid transparent',
-                                borderRight: '6px solid white',
+                                borderRight: `6px solid ${otherMsgBg}`,
                               }}
                             />
                           )}
@@ -702,11 +909,15 @@ export default function ChatWindow() {
                           <span className="underline break-all">{msg.content.split(/[/\\]/).pop() || msg.content}</span>
                         </button>
                       ) : (
-                        <div className={`relative px-2.5 py-1.5 text-sm whitespace-pre-wrap break-all ${
-                          isMe 
-                            ? 'bg-[#aacbec] text-gray-900 rounded' 
-                            : 'bg-white text-gray-900 rounded'
-                        }`}>
+                        <div 
+                          className="relative px-2.5 py-1.5 whitespace-pre-wrap break-all rounded"
+                          style={{
+                            backgroundColor: isMe ? myMsgBg : otherMsgBg,
+                            color: isMe ? myMsgText : otherMsgText,
+                            fontSize: `${chatSettings.fontSize}px`,
+                            fontWeight: getFontWeight(),
+                          }}
+                        >
                           {/* 꼬리 */}
                           {isMe ? (
                             <span 
@@ -717,7 +928,7 @@ export default function ChatWindow() {
                                 height: 0,
                                 borderTop: '6px solid transparent',
                                 borderBottom: '6px solid transparent',
-                                borderLeft: '6px solid #aacbec',
+                                borderLeft: `6px solid ${myMsgBg}`,
                               }}
                             />
                           ) : (
@@ -729,7 +940,7 @@ export default function ChatWindow() {
                                 height: 0,
                                 borderTop: '6px solid transparent',
                                 borderBottom: '6px solid transparent',
-                                borderRight: '6px solid white',
+                                borderRight: `6px solid ${otherMsgBg}`,
                               }}
                             />
                           )}
@@ -740,14 +951,15 @@ export default function ChatWindow() {
                     
                     {/* 상대방 메시지: 시간 */}
                     {!isMe && showTime && (
-                      <span className="text-[10px] text-gray-400 self-end">{formatTime(msg.created_at)}</span>
+                      <span className="text-[10px] self-end" style={{ color: textColorMuted }}>{formatTime(msg.created_at)}</span>
                     )}
                     
                     {/* 답장 버튼 (상대방 메시지) */}
                     {!isMe && (
                       <button
                         onClick={() => setReplyTo(msg)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-white transition"
+                        className="opacity-0 group-hover:opacity-100 p-1 transition"
+                        style={{ color: textColorMuted }}
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
@@ -834,71 +1046,6 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* 게시판 모달 */}
-      {showBoardModal && (
-        <div 
-          className="fixed inset-0 bg-black/30 flex items-center justify-center" 
-          style={{ zIndex: 99999 }}
-          onClick={() => setShowBoardModal(false)}
-        >
-          <div className="bg-white rounded-xl w-[360px] max-h-[80vh] shadow-xl flex flex-col" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b flex-shrink-0">
-              <p className="font-medium text-gray-800">📋 게시판</p>
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => setShowNewPostModal(true)}
-                  className="text-blue-500 text-[13px] hover:underline"
-                >
-                  글쓰기
-                </button>
-                <button onClick={() => setShowBoardModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
-              </div>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto">
-              {boardPosts.length === 0 ? (
-                <p className="text-center text-gray-400 text-[13px] py-8">게시글이 없습니다</p>
-              ) : (
-                boardPosts.map(post => (
-                  <div key={post.id} className={`p-3 border-b hover:bg-gray-50 ${post.is_important ? 'bg-yellow-50' : ''}`}>
-                    <div className="flex items-start gap-2">
-                      {post.is_important && (
-                        <span className="text-yellow-500 text-[13px] flex-shrink-0">📌</span>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-medium text-gray-800">{post.title}</p>
-                        <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{post.content}</p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {post.author?.name || '알 수 없음'} · {formatDate(post.created_at)}
-                        </p>
-                      </div>
-                      {post.author_id === user.id && (
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => handleToggleImportant(post.id, post.is_important)}
-                            className={`p-1 rounded ${post.is_important ? 'text-yellow-500' : 'text-gray-400 hover:text-yellow-500'}`}
-                          >
-                            📌
-                          </button>
-                          <button
-                            onClick={() => handleDeletePost(post.id)}
-                            className="p-1 text-gray-400 hover:text-red-500"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 새 게시글 작성 모달 */}
       {showNewPostModal && (
         <div 
@@ -906,26 +1053,19 @@ export default function ChatWindow() {
           style={{ zIndex: 100000 }}
           onClick={() => setShowNewPostModal(false)}
         >
-          <div className="bg-white rounded-xl p-4 w-[360px] shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl p-4 w-[90%] max-w-[360px] shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <p className="font-medium text-gray-800">새 게시글</p>
+              <p className="font-medium text-gray-800">새 메모</p>
               <button onClick={() => setShowNewPostModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
-            
-            <input
-              type="text"
-              value={newPostTitle}
-              onChange={(e) => setNewPostTitle(e.target.value)}
-              placeholder="제목"
-              className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2"
-            />
             
             <textarea
               value={newPostContent}
               onChange={(e) => setNewPostContent(e.target.value)}
-              placeholder="내용"
+              placeholder="내용을 입력하세요"
               className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 mb-2 resize-none"
               rows={4}
+              autoFocus
             />
             
             <label className="flex items-center gap-2 mb-3 cursor-pointer">
@@ -947,7 +1087,7 @@ export default function ChatWindow() {
               </button>
               <button
                 onClick={handleCreatePost}
-                disabled={!newPostTitle.trim() || !newPostContent.trim()}
+                disabled={!newPostContent.trim()}
                 className="flex-1 py-2 text-[13px] text-white bg-[#5b9bd5] rounded-lg hover:bg-[#4a8bc5] disabled:opacity-50"
               >
                 작성
@@ -964,7 +1104,7 @@ export default function ChatWindow() {
           style={{ zIndex: 99999 }}
           onClick={() => setShowMembersModal(false)}
         >
-          <div className="bg-white rounded-xl p-4 w-[360px] max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl p-4 w-[90%] max-w-[360px] max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">참여 멤버 ({memberCount}명)</p>
               <button onClick={() => setShowMembersModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -995,7 +1135,7 @@ export default function ChatWindow() {
           style={{ zIndex: 99999 }}
           onClick={() => setShowInviteModal(false)}
         >
-          <div className="bg-white rounded-xl p-4 w-[360px] max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl p-4 w-[90%] max-w-[360px] max-h-80 shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">멤버 초대</p>
               <button onClick={() => setShowInviteModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -1035,7 +1175,7 @@ export default function ChatWindow() {
           style={{ zIndex: 99999 }}
           onClick={() => setShowFileModal(false)}
         >
-          <div className="bg-white rounded-xl p-4 w-[360px] shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl p-4 w-[90%] max-w-[360px] shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-medium text-gray-800">파일 경로 공유</p>
               <button onClick={() => setShowFileModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
