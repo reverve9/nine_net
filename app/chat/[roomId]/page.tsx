@@ -1016,7 +1016,7 @@ export default function ChatWindow() {
           onChange={handleMessageChange}
           onKeyDown={handleKeyDown}
           placeholder={room?.is_self ? '메모 입력...' : '메시지 입력... (@로 멘션)'}
-          className="w-full px-3 py-2 text-[13px] bg-white focus:outline-none resize-none border-0"
+          className="w-full px-3 py-2 text-[13px] bg-white text-gray-900 focus:outline-none resize-none border-0"
           style={{ height: '80px' }}
         />
         
