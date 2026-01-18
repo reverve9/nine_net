@@ -340,7 +340,12 @@ export default function MessengerMain() {
   }
 
   const fetchMembers = async () => {
-    const { data } = await supabase.from('profiles').select('*').neq('id', user.id)
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .neq('id', user.id)
+      .is('deleted_at', null)
+      .eq('approval_status', 'approved')
     if (data) setMembers(data)
   }
 
