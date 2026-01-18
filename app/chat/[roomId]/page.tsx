@@ -368,46 +368,6 @@ export default function ChatWindow() {
     if (member) setRoomMembers(prev => [...prev, member])
   }
 
-  const handleLeaveRoom = async () => {
-    if (room?.is_self) {
-      alert('나와의 채팅은 나갈 수 없습니다.')
-      return
-    }
-    
-    if (!confirm('채팅방을 나가시겠습니까?')) return
-    
-    const myName = profile?.name || user.email?.split('@')[0]
-    
-    // 먼저 삭제
-    const { error } = await supabase
-      .from('room_members')
-      .delete()
-      .eq('room_id', roomId)
-      .eq('user_id', user.id)
-    
-    if (error) {
-      alert('채팅방 나가기에 실패했습니다: ' + error.message)
-      return
-    }
-    
-    
-    // 창 먼저 닫기
-    if (window.electronAPI?.isElectron) {
-      window.electronAPI.closeWindow?.()
-    } else {
-      window.close()
-    }
-    
-    // 시스템 메시지 추가 (창 닫은 후)
-    supabase.from('messages').insert({
-      content: `${myName}님이 나갔습니다.`,
-      content_type: 'system',
-      sender_id: user.id,
-      room_id: roomId,
-      read_by: [],
-    })
-  }
-
   const handleCreatePost = async () => {
     if (!newPostTitle.trim() || !newPostContent.trim()) return
     await supabase.from('board_posts').insert({
@@ -566,25 +526,14 @@ export default function ChatWindow() {
             </button>
             
             {!room?.is_self && (
-              <>
-                <button
-                  onClick={() => setShowInviteModal(true)}
-                  className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                  </svg>
-                </button>
-                
-                <button
-                  onClick={handleLeaveRoom}
-                  className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-red-400 hover:bg-white/10 rounded-full transition"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                  </svg>
-                </button>
-              </>
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 rounded-full transition"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+              </button>
             )}
           </div>
         </div>
