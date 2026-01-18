@@ -13,38 +13,11 @@ export default function Home() {
   useEffect(() => {
     // 현재 세션 확인
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (session?.user) {
-        // 승인 상태 확인
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('approval_status')
-          .eq('id', session.user.id)
-          .single()
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
         
-        if (profile?.approval_status !== 'approved') {
-          // 미승인 → 로그아웃
-          await supabase.auth.signOut()
-          setApprovalStatus(profile?.approval_status || 'pending')
-          setUser(null)
-        } else {
-          setUser(session.user)
-        }
-      }
-      
-      setLoading(false)
-    }
-
-    checkSession()
-
-    // 인증 상태 변화 감지
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        if (_event === 'SIGNED_IN' && session?.user) {
-          // 로그인 시 로딩 상태로 전환
-          setLoading(true)
-          
+        if (session?.user) {
+          // 승인 상태 확인
           const { data: profile } = await supabase
             .from('profiles')
             .select('approval_status')
@@ -52,17 +25,54 @@ export default function Home() {
             .single()
           
           if (profile?.approval_status !== 'approved') {
+            // 미승인 → 로그아웃
             await supabase.auth.signOut()
             setApprovalStatus(profile?.approval_status || 'pending')
             setUser(null)
           } else {
-            setApprovalStatus(null)
             setUser(session.user)
           }
+        }
+      } catch (error) {
+        console.error('Session check error:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    checkSession()
+
+    // 인증 상태 변화 감지
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (_event, session) => {
+        console.log('Auth event:', _event)
+        
+        if (_event === 'SIGNED_IN' && session?.user) {
+          setLoading(true)
           
-          setLoading(false)
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('approval_status')
+              .eq('id', session.user.id)
+              .single()
+            
+            if (profile?.approval_status !== 'approved') {
+              await supabase.auth.signOut()
+              setApprovalStatus(profile?.approval_status || 'pending')
+              setUser(null)
+            } else {
+              setApprovalStatus(null)
+              setUser(session.user)
+            }
+          } catch (error) {
+            console.error('Auth change error:', error)
+          } finally {
+            setLoading(false)
+          }
         } else if (_event === 'SIGNED_OUT') {
           setUser(null)
+          setLoading(false)
         }
       }
     )
