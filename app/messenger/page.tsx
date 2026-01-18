@@ -35,6 +35,7 @@ interface ContextMenu {
   isSelf: boolean
 }
 
+// UPDATED VERSION WITH 1:1 CHAT FIX
 export default function MessengerMain() {
   const [user, setUser] = useState<any>(null)
   const [profile, setProfile] = useState<Member | null>(null)
