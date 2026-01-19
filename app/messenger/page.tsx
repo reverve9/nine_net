@@ -340,12 +340,7 @@ export default function MessengerMain() {
   }
 
   const fetchMembers = async () => {
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .neq('id', user.id)
-      .is('deleted_at', null)
-      .eq('approval_status', 'approved')
+    const { data } = await supabase.from('profiles').select('*').neq('id', user.id)
     if (data) setMembers(data)
   }
 
@@ -385,7 +380,23 @@ export default function MessengerMain() {
   }
 
   const openSelfChat = async () => {
-    const selfRoom = rooms.find(r => r.is_self)
+    let selfRoom = rooms.find(r => r.is_self)
+    
+    // 없으면 생성
+    if (!selfRoom) {
+      const { data: newRoom } = await supabase
+        .from('chat_rooms')
+        .insert({ name: '나와의 채팅', is_group: false, is_self: true, created_by: user.id })
+        .select()
+        .single()
+      
+      if (newRoom) {
+        await supabase.from('room_members').insert({ room_id: newRoom.id, user_id: user.id })
+        selfRoom = { ...newRoom, display_name: '나와의 채팅' }
+        fetchRooms() // 목록 새로고침
+      }
+    }
+    
     if (selfRoom) openChatWindow(selfRoom)
   }
 

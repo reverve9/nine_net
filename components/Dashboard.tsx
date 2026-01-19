@@ -36,10 +36,6 @@ export default function Dashboard({ user }: DashboardProps) {
 
     fetchProfile()
     
-    // 로그인 시 메신저 창 새로고침
-    if (window.electronAPI?.onLogin) {
-      window.electronAPI.onLogin()
-    }
   }, [user.id])
 
   const handleLogout = async () => {

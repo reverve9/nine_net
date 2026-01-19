@@ -20,6 +20,7 @@ function createMainWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      partition: 'persist:ninenet',
     },
     titleBarStyle: 'default',
     icon: path.join(__dirname, '../public/icon-512.png'),
@@ -60,18 +61,38 @@ function createMessengerWindow() {
     movable: true,
     resizable: true,
     alwaysOnTop: false,
-    frame: false,
+    frame: true,
     transparent: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      partition: 'persist:ninenet',
     },
     icon: path.join(__dirname, '../public/icon-512.png'),
     title: '메신저',
   });
 
   messengerWindow.loadURL(baseUrl + '/messenger');
+  console.log('Messenger URL:', baseUrl + '/messenger');
+
+  // 에러 핸들러
+  messengerWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.log('Load failed:', errorCode, errorDescription);
+  });
+
+  messengerWindow.webContents.on('crashed', () => {
+    console.log('Messenger window crashed!');
+  });
+
+  messengerWindow.webContents.on('did-finish-load', () => {
+    console.log('Messenger loaded successfully');
+  });
+
+  // 디버깅용 - 비활성화
+  // if (isDev) {
+  //   messengerWindow.webContents.openDevTools({ mode: 'detach' });
+  // }
 
   messengerWindow.on('closed', () => {
     messengerWindow = null;
@@ -105,6 +126,7 @@ function createChatWindow(roomId, roomName) {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
+      partition: 'persist:ninenet',
     },
     icon: path.join(__dirname, '../public/icon-512.png'),
     title: roomName || '채팅',
