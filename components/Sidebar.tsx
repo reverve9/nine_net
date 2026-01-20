@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import ProfileModal from './ProfileModal'
 
-type PageType = 'home' | 'board' | 'schedule' | 'settings' | 'admin'
+type PageType = 'dashboard' | 'contacts' | 'schedule' | 'project' | 'board' | 'approval' | 'admin'
 
 interface SidebarProps {
   currentPage: PageType
@@ -17,11 +17,13 @@ interface SidebarProps {
 }
 
 const menuItems: { id: PageType; icon: string; label: string; adminOnly?: boolean }[] = [
-  { id: 'home', icon: '🏠', label: '홈' },
-  { id: 'board', icon: '📋', label: '게시판' },
+  { id: 'dashboard', icon: '📊', label: '대시보드' },
+  { id: 'contacts', icon: '📇', label: '연락처' },
   { id: 'schedule', icon: '📅', label: '일정' },
-  { id: 'settings', icon: '⚙️', label: '설정' },
-  { id: 'admin', icon: '👑', label: '사용자 관리', adminOnly: true },
+  { id: 'project', icon: '📋', label: '프로젝트' },
+  { id: 'board', icon: '📝', label: '게시판' },
+  { id: 'approval', icon: '✅', label: '결재' },
+  { id: 'admin', icon: '⚙️', label: '관리', adminOnly: true },
 ]
 
 export default function Sidebar({

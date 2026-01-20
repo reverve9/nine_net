@@ -4,20 +4,24 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 import Sidebar from './Sidebar'
 import FloatingChat from './FloatingChat'
-import HomePage from './pages/HomePage'
-import BoardPage from './pages/BoardPage'
+
+// 페이지 컴포넌트들
+import DashboardPage from './pages/DashboardPage'
+import ContactsPage from './pages/ContactsPage'
 import SchedulePage from './pages/SchedulePage'
-import SettingsPage from './pages/SettingsPage'
+import ProjectPage from './pages/ProjectPage'
+import BoardPage from './pages/BoardPage'
+import ApprovalPage from './pages/ApprovalPage'
 import AdminPage from './pages/AdminPage'
 
-type PageType = 'home' | 'board' | 'schedule' | 'settings' | 'admin'
+type PageType = 'dashboard' | 'contacts' | 'schedule' | 'project' | 'board' | 'approval' | 'admin'
 
 interface DashboardProps {
   user: any
 }
 
 export default function Dashboard({ user }: DashboardProps) {
-  const [currentPage, setCurrentPage] = useState<PageType>('home')
+  const [currentPage, setCurrentPage] = useState<PageType>('dashboard')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [profile, setProfile] = useState<any>(null)
 
@@ -49,18 +53,22 @@ export default function Dashboard({ user }: DashboardProps) {
 
   const renderPage = () => {
     switch (currentPage) {
-      case 'home':
-        return <HomePage user={user} profile={profile} setCurrentPage={setCurrentPage} />
-      case 'board':
-        return <BoardPage user={user} />
+      case 'dashboard':
+        return <DashboardPage user={user} profile={profile} setCurrentPage={setCurrentPage} />
+      case 'contacts':
+        return <ContactsPage user={user} profile={profile} />
       case 'schedule':
         return <SchedulePage user={user} />
-      case 'settings':
-        return <SettingsPage user={user} profile={profile} setProfile={setProfile} />
+      case 'project':
+        return <ProjectPage user={user} profile={profile} />
+      case 'board':
+        return <BoardPage user={user} />
+      case 'approval':
+        return <ApprovalPage user={user} profile={profile} />
       case 'admin':
         return <AdminPage user={user} profile={profile} />
       default:
-        return <HomePage user={user} profile={profile} setCurrentPage={setCurrentPage} />
+        return <DashboardPage user={user} profile={profile} setCurrentPage={setCurrentPage} />
     }
   }
 
