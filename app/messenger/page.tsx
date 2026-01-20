@@ -635,51 +635,62 @@ export default function MessengerMain() {
 
   return (
     <div className="h-screen flex bg-white overflow-hidden">
-      {/* 사이드바 */}
-      <div className="w-14 bg-gray-100 flex flex-col items-center py-2 flex-shrink-0">
+      {/* 사이드바 - 카카오톡 스타일 */}
+      <div 
+        className="w-[70px] bg-gray-100 flex flex-col items-center py-2 flex-shrink-0"
+        style={{ WebkitAppRegion: 'drag' } as any}
+      >
+        {/* 신호등 버튼 (가로 배열) */}
         {isElectron && (
-          <div className="flex flex-col gap-1.5 mb-4 mt-1">
+          <div 
+            className="flex gap-1.5 mb-4 mt-1"
+            style={{ WebkitAppRegion: 'no-drag' } as any}
+          >
             <button onClick={handleClose} className="w-3 h-3 rounded-full bg-[#ff5f57] hover:brightness-90 transition" />
             <button onClick={handleMinimize} className="w-3 h-3 rounded-full bg-[#ffbd2e] hover:brightness-90 transition" />
             <button className="w-3 h-3 rounded-full bg-[#28c840] hover:brightness-90 transition" />
           </div>
         )}
         
-        <button
-          onClick={() => setActiveTab('members')}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1 transition ${
-            activeTab === 'members' ? 'bg-white shadow text-gray-900' : 'text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-          </svg>
-        </button>
+        <div style={{ WebkitAppRegion: 'no-drag' } as any} className="flex flex-col items-center w-full">
+          <button
+            onClick={() => setActiveTab('members')}
+            className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1 transition ${
+              activeTab === 'members' ? 'bg-white shadow text-gray-900' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('chats')}
+            className={`w-12 h-12 rounded-xl flex items-center justify-center mb-1 transition ${
+              activeTab === 'chats' ? 'bg-white shadow text-gray-900' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
+            </svg>
+          </button>
+        </div>
         
-        <button
-          onClick={() => setActiveTab('chats')}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center mb-1 transition ${
-            activeTab === 'chats' ? 'bg-white shadow text-gray-900' : 'text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.17L4 17.17V4h16v12z"/>
-          </svg>
-        </button>
+        <div className="flex-1" style={{ WebkitAppRegion: 'drag' } as any} />
         
-        <div className="flex-1" />
-        
-        <button
-          onClick={() => setActiveTab('settings')}
-          className={`w-10 h-10 rounded-xl flex items-center justify-center mb-2 transition ${
-            activeTab === 'settings' ? 'bg-white shadow text-gray-900' : 'text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-          </svg>
-        </button>
+        <div style={{ WebkitAppRegion: 'no-drag' } as any}>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className={`w-12 h-12 rounded-xl flex items-center justify-center mb-2 transition ${
+              activeTab === 'settings' ? 'bg-white shadow text-gray-900' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth={1.5} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* 메인 영역 */}

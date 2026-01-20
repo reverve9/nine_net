@@ -22,7 +22,10 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.js'),
       partition: 'persist:ninenet',
     },
-    titleBarStyle: 'default',
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 12, y: 14 },
+    frame: true,
+    transparent: false,
     icon: path.join(__dirname, '../public/icon-512.png'),
   });
 
@@ -61,7 +64,7 @@ function createMessengerWindow() {
     movable: true,
     resizable: true,
     alwaysOnTop: false,
-    frame: true,
+    frame: false,
     transparent: false,
     webPreferences: {
       nodeIntegration: false,
