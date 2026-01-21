@@ -1043,7 +1043,7 @@ export default function ProjectPage({ user, profile, subMenu }: ProjectPageProps
                             : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                         }`}
                       >
-                        {STATUS_CONFIG[status].icon} {STATUS_CONFIG[status].label}
+                        {STATUS_CONFIG[status].label}
                       </button>
                     ))}
                   </div>
