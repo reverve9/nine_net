@@ -77,7 +77,7 @@ export default function Dashboard({ user }: DashboardProps) {
         }
         return <SchedulePage user={user} profile={profile} subMenu={currentSubMenu} />
       case 'project':
-        return <ProjectPage user={user} profile={profile} />
+        return <ProjectPage user={user} profile={profile} subMenu={currentSubMenu} />
       case 'board':
         return <BoardPage user={user} />
       case 'approval':

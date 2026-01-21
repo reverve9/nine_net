@@ -926,21 +926,21 @@ function FormModal({ form, user, profile, onClose, onSubmit }: FormModalProps) {
         <div className="flex items-center justify-end gap-2 p-4 border-t">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-[14px] text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+            className="px-3 py-1.5 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 text-[13px]"
           >
             취소
           </button>
           <button
             onClick={() => handleSave(true)}
             disabled={saving}
-            className="px-4 py-2 text-[14px] text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+            className="px-3 py-1.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-[13px] disabled:opacity-50"
           >
             임시 저장
           </button>
           <button
             onClick={() => handleSave(false)}
             disabled={saving || approvers.length === 0}
-            className="px-4 py-2 text-[14px] text-white rounded-lg hover:opacity-90 disabled:opacity-50"
+            className="px-3 py-1.5 text-white rounded-lg hover:opacity-90 text-[13px] disabled:opacity-50"
             style={{ backgroundColor: '#5677b0' }}
           >
             결재 상신

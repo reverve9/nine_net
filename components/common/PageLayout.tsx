@@ -24,28 +24,22 @@ export const ViewModeToggle = ({
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void 
 }) => (
-  <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-    <button
-      onClick={() => setViewMode('list')}
-      className={`px-2.5 py-1 rounded-md text-[13px] transition ${
-        viewMode === 'list' 
-          ? 'bg-white text-blue-600 shadow-sm' 
-          : 'text-gray-500 hover:text-gray-700'
-      }`}
-      title="리스트 보기"
-    >
-      ☰
-    </button>
+  <div className="flex bg-gray-100 rounded-lg p-1">
     <button
       onClick={() => setViewMode('card')}
-      className={`px-2.5 py-1 rounded-md text-[13px] transition ${
-        viewMode === 'card' 
-          ? 'bg-white text-blue-600 shadow-sm' 
-          : 'text-gray-500 hover:text-gray-700'
+      className={`px-3 py-1.5 text-[13px] rounded-md transition ${
+        viewMode === 'card' ? 'bg-white shadow text-gray-800' : 'text-gray-500'
       }`}
-      title="카드 보기"
     >
-      ▦
+      카드
+    </button>
+    <button
+      onClick={() => setViewMode('list')}
+      className={`px-3 py-1.5 text-[13px] rounded-md transition ${
+        viewMode === 'list' ? 'bg-white shadow text-gray-800' : 'text-gray-500'
+      }`}
+    >
+      목록
     </button>
   </div>
 )
@@ -96,7 +90,8 @@ export const Pagination = ({
         <button
           key={p}
           onClick={() => onPageChange(p)}
-          className={`px-2 py-1 rounded ${p === currentPage ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
+          className={`px-2 py-1 rounded text-[13px] ${p === currentPage ? 'text-white' : 'hover:bg-gray-100'}`}
+          style={p === currentPage ? { backgroundColor: PRIMARY_COLOR } : {}}
         >
           {p}
         </button>
@@ -313,20 +308,119 @@ export const PageHeader = ({
 )
 
 // ============================================
-// 추가 버튼
+// 프라이머리 컬러
 // ============================================
-export const AddButton = ({
+export const PRIMARY_COLOR = '#5677b0'
+
+// ============================================
+// 프라이머리 버튼 (메인 액션)
+// ============================================
+export const PrimaryButton = ({
   label,
-  onClick
+  onClick,
+  disabled = false,
+  className = ''
 }: {
   label: string
   onClick: () => void
+  disabled?: boolean
+  className?: string
 }) => (
   <button
     onClick={onClick}
-    className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-[14px]"
+    disabled={disabled}
+    className={`px-3 py-1.5 text-white rounded-lg hover:opacity-90 text-[13px] disabled:opacity-50 ${className}`}
+    style={{ backgroundColor: PRIMARY_COLOR }}
+  >
+    {label}
+  </button>
+)
+
+// ============================================
+// 추가 버튼 (+ 포함)
+// ============================================
+export const AddButton = ({
+  label,
+  onClick,
+  disabled = false
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className="px-3 py-1.5 text-white rounded-lg hover:opacity-90 text-[13px] disabled:opacity-50"
+    style={{ backgroundColor: PRIMARY_COLOR }}
   >
     + {label}
+  </button>
+)
+
+// ============================================
+// 세컨더리 버튼 (보조 액션)
+// ============================================
+export const SecondaryButton = ({
+  label,
+  onClick,
+  disabled = false,
+  className = ''
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+  className?: string
+}) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`px-3 py-1.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-[13px] disabled:opacity-50 ${className}`}
+  >
+    {label}
+  </button>
+)
+
+// ============================================
+// 취소 버튼 (회색)
+// ============================================
+export const CancelButton = ({
+  label = '취소',
+  onClick,
+  disabled = false
+}: {
+  label?: string
+  onClick: () => void
+  disabled?: boolean
+}) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className="px-3 py-1.5 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 text-[13px] disabled:opacity-50"
+  >
+    {label}
+  </button>
+)
+
+// ============================================
+// 위험 버튼 (삭제 등)
+// ============================================
+export const DangerButton = ({
+  label,
+  onClick,
+  disabled = false
+}: {
+  label: string
+  onClick: () => void
+  disabled?: boolean
+}) => (
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    className="px-3 py-1.5 text-white rounded-lg hover:opacity-90 text-[13px] disabled:opacity-50"
+    style={{ backgroundColor: '#c4334b' }}
+  >
+    {label}
   </button>
 )
 
@@ -438,10 +532,10 @@ export const FilePreviewModal = ({
             {/* 다운로드 버튼 */}
             <button
               onClick={handleDownload}
-              className="px-3 py-1.5 text-[13px] text-white bg-blue-500 rounded-lg hover:bg-blue-600 flex items-center gap-1"
+              className="px-3 py-1.5 text-[13px] text-white rounded-lg hover:opacity-90 flex items-center gap-1"
+              style={{ backgroundColor: PRIMARY_COLOR }}
             >
-              <span>⬇️</span>
-              <span>다운로드</span>
+              다운로드
             </button>
             
             {/* 닫기 버튼 */}
@@ -532,7 +626,7 @@ export const ConfirmModal = ({
   message,
   confirmText = '확인',
   cancelText = '취소',
-  confirmColor = 'blue'
+  confirmColor = 'primary'
 }: {
   isOpen: boolean
   onClose: () => void
@@ -541,13 +635,13 @@ export const ConfirmModal = ({
   message: string
   confirmText?: string
   cancelText?: string
-  confirmColor?: 'blue' | 'red'
+  confirmColor?: 'primary' | 'red'
 }) => {
   if (!isOpen) return null
 
-  const colorClass = confirmColor === 'red' 
-    ? 'bg-red-500 hover:bg-red-600' 
-    : 'bg-blue-500 hover:bg-blue-600'
+  const colorStyle = confirmColor === 'red' 
+    ? { backgroundColor: '#c4334b' }
+    : { backgroundColor: PRIMARY_COLOR }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -557,7 +651,7 @@ export const ConfirmModal = ({
         <div className="flex gap-2">
           <button
             onClick={onClose}
-            className="flex-1 py-2 text-[14px] text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
+            className="flex-1 py-1.5 text-[13px] text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200"
           >
             {cancelText}
           </button>
@@ -566,7 +660,8 @@ export const ConfirmModal = ({
               onConfirm()
               onClose()
             }}
-            className={`flex-1 py-2 text-[14px] text-white ${colorClass} rounded-lg`}
+            className="flex-1 py-1.5 text-[13px] text-white rounded-lg hover:opacity-90"
+            style={colorStyle}
           >
             {confirmText}
           </button>

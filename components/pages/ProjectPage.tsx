@@ -18,6 +18,7 @@ import {
 interface ProjectPageProps {
   user: any
   profile: any
+  subMenu: string
 }
 
 interface ChecklistItem {
@@ -79,10 +80,10 @@ interface Member {
 type StatusType = 'all' | 'pending' | 'in_progress' | 'review' | 'completed'
 
 const STATUS_CONFIG = {
-  pending: { label: '예정', icon: '📋', color: 'bg-gray-100 text-gray-700' },
-  in_progress: { label: '진행', icon: '🔄', color: 'bg-blue-100 text-blue-700' },
-  review: { label: '검토', icon: '👀', color: 'bg-yellow-100 text-yellow-700' },
-  completed: { label: '완료', icon: '✅', color: 'bg-green-100 text-green-700' },
+  pending: { label: '예정', color: 'bg-gray-100 text-gray-700' },
+  in_progress: { label: '진행', color: 'bg-blue-100 text-blue-700' },
+  review: { label: '검토', color: 'bg-yellow-100 text-yellow-700' },
+  completed: { label: '완료', color: 'bg-green-100 text-green-700' },
 }
 
 const PRIORITY_CONFIG = {
@@ -98,11 +99,12 @@ const CATEGORY_OPTIONS = [
 // ============================================
 // 메인 컴포넌트
 // ============================================
-export default function ProjectPage({ user, profile }: ProjectPageProps) {
+export default function ProjectPage({ user, profile, subMenu }: ProjectPageProps) {
   const [projects, setProjects] = useState<Project[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [activeStatus, setActiveStatus] = useState<StatusType>('all')
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card')
   
   // 모달 상태
   const [showModal, setShowModal] = useState(false)
@@ -385,15 +387,63 @@ export default function ProjectPage({ user, profile }: ProjectPageProps) {
   }
 
   // ============================================
-  // 필터링
+  // 필터링 및 통계
   // ============================================
+  // 카테고리별 필터링
+  const getCategoryFromSubMenu = (sub: string) => {
+    const map: Record<string, string> = {
+      'dev': '개발',
+      'marketing': '마케팅',
+      'design': '디자인',
+      'planning': '기획',
+      'video': '영상',
+      'other': '기타',
+    }
+    return map[sub] || null
+  }
+
+  const categoryFilter = getCategoryFromSubMenu(subMenu)
+  
+  // 카테고리 필터 적용된 프로젝트
+  const categoryProjects = categoryFilter 
+    ? projects.filter(p => p.category === categoryFilter)
+    : projects
+
+  // 상태 필터까지 적용된 프로젝트
   const filteredProjects = activeStatus === 'all' 
-    ? projects 
-    : projects.filter(p => p.status === activeStatus)
+    ? categoryProjects 
+    : categoryProjects.filter(p => p.status === activeStatus)
+
+  // 통계 계산
+  const stats = {
+    myAssigned: categoryProjects.filter(p => p.assignees?.includes(user.id)).length,
+    thisWeekDue: categoryProjects.filter(p => {
+      if (!p.end_date) return false
+      const endDate = new Date(p.end_date)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const weekLater = new Date()
+      weekLater.setDate(today.getDate() + 7)
+      return endDate >= today && endDate <= weekLater && p.status !== 'completed'
+    }).length,
+    overdue: categoryProjects.filter(p => {
+      if (!p.end_date || p.status === 'completed') return false
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      return new Date(p.end_date) < today
+    }).length,
+    unassigned: categoryProjects.filter(p => !p.assignees || p.assignees.length === 0).length,
+  }
 
   const getStatusCount = (status: StatusType) => {
-    if (status === 'all') return projects.length
-    return projects.filter(p => p.status === status).length
+    if (status === 'all') return categoryProjects.length
+    return categoryProjects.filter(p => p.status === status).length
+  }
+
+  // 페이지 타이틀
+  const getPageTitle = () => {
+    if (subMenu === 'all' || !categoryFilter) return '전체 프로젝트'
+    return categoryFilter
   }
 
   // ============================================
@@ -427,108 +477,253 @@ export default function ProjectPage({ user, profile }: ProjectPageProps) {
   return (
     <PageContainer>
       {/* 헤더 */}
-      <PageHeader title="프로젝트">
-        <AddButton label="새 프로젝트" onClick={openCreateModal} />
-      </PageHeader>
-
-      {/* 칸반 탭 (상단) */}
-      <div className="flex gap-2 mb-4 p-1 bg-gray-100 rounded-xl">
-        <button
-          onClick={() => setActiveStatus('all')}
-          className={`flex-1 py-2.5 px-4 rounded-lg text-[14px] font-medium transition ${
-            activeStatus === 'all' 
-              ? 'bg-white shadow text-gray-800' 
-              : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          전체 <span className="ml-1 text-[12px] text-gray-400">{getStatusCount('all')}</span>
-        </button>
-        {(Object.keys(STATUS_CONFIG) as Array<keyof typeof STATUS_CONFIG>).map((status) => (
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-lg font-bold text-gray-800">{getPageTitle()}</h1>
+        <div className="flex items-center gap-2">
+          {/* 뷰 토글 */}
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('card')}
+              className={`px-3 py-1.5 text-[13px] rounded-md transition ${
+                viewMode === 'card' ? 'bg-white shadow text-gray-800' : 'text-gray-500'
+              }`}
+            >
+              카드
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`px-3 py-1.5 text-[13px] rounded-md transition ${
+                viewMode === 'list' ? 'bg-white shadow text-gray-800' : 'text-gray-500'
+              }`}
+            >
+              목록
+            </button>
+          </div>
           <button
-            key={status}
-            onClick={() => setActiveStatus(status)}
-            className={`flex-1 py-2.5 px-4 rounded-lg text-[14px] font-medium transition ${
-              activeStatus === status 
-                ? 'bg-white shadow text-gray-800' 
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
+            onClick={openCreateModal}
+            className="px-3 py-1.5 text-white rounded-lg hover:opacity-90 text-[13px]"
+            style={{ backgroundColor: '#5677b0' }}
           >
-            {STATUS_CONFIG[status].icon} {STATUS_CONFIG[status].label}
-            <span className="ml-1 text-[12px] text-gray-400">{getStatusCount(status)}</span>
+            + 새 프로젝트
           </button>
-        ))}
+        </div>
       </div>
 
-      {/* 프로젝트 카드 목록 */}
+      {/* 통계 박스 */}
+      <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-[13px] text-gray-500 mb-1">내 담당</div>
+          <div className="text-[24px] font-bold text-gray-800">{stats.myAssigned}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-[13px] text-gray-500 mb-1">이번 주 마감</div>
+          <div className="text-[24px] font-bold text-gray-800">{stats.thisWeekDue}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-[13px] text-gray-500 mb-1">지연</div>
+          <div className="text-[24px] font-bold" style={{ color: stats.overdue > 0 ? '#c4334b' : '#374151' }}>{stats.overdue}</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-[13px] text-gray-500 mb-1">미배정</div>
+          <div className="text-[24px] font-bold text-gray-800">{stats.unassigned}</div>
+        </div>
+      </div>
+
+      {/* 상태 필터 탭 */}
+      <div className="flex gap-1 mb-4">
+        <button
+          onClick={() => setActiveStatus('all')}
+          className={`px-4 py-2 text-[13px] rounded-lg transition ${
+            activeStatus === 'all' ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+          style={activeStatus === 'all' ? { backgroundColor: '#5677b0' } : {}}
+        >
+          전체 {getStatusCount('all')}
+        </button>
+        <button
+          onClick={() => setActiveStatus('pending')}
+          className={`px-4 py-2 text-[13px] rounded-lg transition ${
+            activeStatus === 'pending' ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+          style={activeStatus === 'pending' ? { backgroundColor: '#5677b0' } : {}}
+        >
+          예정 {getStatusCount('pending')}
+        </button>
+        <button
+          onClick={() => setActiveStatus('in_progress')}
+          className={`px-4 py-2 text-[13px] rounded-lg transition ${
+            activeStatus === 'in_progress' ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+          style={activeStatus === 'in_progress' ? { backgroundColor: '#5677b0' } : {}}
+        >
+          진행 {getStatusCount('in_progress')}
+        </button>
+        <button
+          onClick={() => setActiveStatus('completed')}
+          className={`px-4 py-2 text-[13px] rounded-lg transition ${
+            activeStatus === 'completed' ? 'text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+          style={activeStatus === 'completed' ? { backgroundColor: '#5677b0' } : {}}
+        >
+          완료 {getStatusCount('completed')}
+        </button>
+      </div>
+
+      {/* 프로젝트 목록 */}
       <ContentArea>
-        <CardGrid emptyMessage={activeStatus === 'all' ? '프로젝트가 없습니다' : `${STATUS_CONFIG[activeStatus as keyof typeof STATUS_CONFIG]?.label} 상태의 프로젝트가 없습니다`}>
-          {filteredProjects.map((project) => (
-            <div
-              key={project.id}
-              onClick={() => openEditModal(project)}
-              className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:shadow-md hover:border-blue-300 transition"
-            >
-              {/* 상단: 카테고리 + 우선순위 */}
-              <div className="flex items-center justify-between mb-2">
-                {project.category ? (
-                  <span className="text-[12px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
-                    {project.category}
+        {viewMode === 'card' ? (
+          /* 카드 뷰 */
+          <CardGrid emptyMessage="프로젝트가 없습니다">
+            {filteredProjects.map((project) => (
+              <div
+                key={project.id}
+                onClick={() => openEditModal(project)}
+                className="bg-white border border-gray-200 rounded-xl p-4 cursor-pointer hover:shadow-md hover:border-blue-300 transition"
+              >
+                {/* 상단: 카테고리 + 우선순위 */}
+                <div className="flex items-center justify-between mb-2">
+                  {project.category ? (
+                    <span className="text-[12px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                      {project.category}
+                    </span>
+                  ) : <span />}
+                  <span className={`text-[11px] px-2 py-0.5 rounded ${PRIORITY_CONFIG[project.priority].color}`}>
+                    {PRIORITY_CONFIG[project.priority].label}
                   </span>
-                ) : <span />}
-                <span className={`text-[11px] px-2 py-0.5 rounded ${PRIORITY_CONFIG[project.priority].color}`}>
-                  {PRIORITY_CONFIG[project.priority].label}
-                </span>
-              </div>
+                </div>
 
-              {/* 제목 */}
-              <h3 className="text-[15px] font-semibold text-gray-800 mb-2 line-clamp-2">
-                {project.name}
-              </h3>
+                {/* 제목 */}
+                <h3 className="text-[15px] font-semibold text-gray-800 mb-2 line-clamp-2">
+                  {project.name}
+                </h3>
 
-              {/* 설명 */}
-              {project.description && (
-                <p className="text-[13px] text-gray-500 mb-3 line-clamp-2">
-                  {project.description}
-                </p>
-              )}
-
-              {/* 기간 */}
-              <div className="flex items-center gap-1 text-[12px] text-gray-400 mb-3">
-                <span>📅</span>
-                <span>{formatDateRange(project.start_date, project.end_date)}</span>
-              </div>
-
-              {/* 하단: 상태 + 담당자 */}
-              <div className="flex items-center justify-between">
-                <span className={`text-[12px] px-2 py-1 rounded-full ${STATUS_CONFIG[project.status].color}`}>
-                  {STATUS_CONFIG[project.status].icon} {STATUS_CONFIG[project.status].label}
-                </span>
-                
-                {project.assignees && project.assignees.length > 0 && (
-                  <div className="flex -space-x-2">
-                    {project.assignees.slice(0, 3).map((assigneeId, i) => {
-                      const member = members.find(m => m.id === assigneeId)
-                      return (
-                        <div 
-                          key={i}
-                          className="w-6 h-6 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center border-2 border-white"
-                          title={member?.name || ''}
-                        >
-                          {member?.name?.charAt(0) || '?'}
-                        </div>
-                      )
-                    })}
-                    {project.assignees.length > 3 && (
-                      <div className="w-6 h-6 rounded-full bg-gray-300 text-gray-600 text-[10px] flex items-center justify-center border-2 border-white">
-                        +{project.assignees.length - 3}
-                      </div>
-                    )}
-                  </div>
+                {/* 설명 */}
+                {project.description && (
+                  <p className="text-[13px] text-gray-500 mb-3 line-clamp-2">
+                    {project.description}
+                  </p>
                 )}
+
+                {/* 기간 */}
+                <div className="text-[12px] text-gray-400 mb-3">
+                  {formatDateRange(project.start_date, project.end_date)}
+                </div>
+
+                {/* 하단: 상태 + 담당자 */}
+                <div className="flex items-center justify-between">
+                  <span className={`text-[12px] px-2 py-1 rounded-full ${STATUS_CONFIG[project.status].color}`}>
+                    {STATUS_CONFIG[project.status].label}
+                  </span>
+                  
+                  {project.assignees && project.assignees.length > 0 && (
+                    <div className="flex -space-x-2">
+                      {project.assignees.slice(0, 3).map((assigneeId, i) => {
+                        const member = members.find(m => m.id === assigneeId)
+                        return (
+                          <div 
+                            key={i}
+                            className="w-6 h-6 rounded-full text-white text-[10px] flex items-center justify-center border-2 border-white"
+                            style={{ backgroundColor: '#5677b0' }}
+                            title={member?.name || ''}
+                          >
+                            {member?.name?.charAt(0) || '?'}
+                          </div>
+                        )
+                      })}
+                      {project.assignees.length > 3 && (
+                        <div className="w-6 h-6 rounded-full bg-gray-300 text-gray-600 text-[10px] flex items-center justify-center border-2 border-white">
+                          +{project.assignees.length - 3}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
-        </CardGrid>
+            ))}
+          </CardGrid>
+        ) : (
+          /* 목록 뷰 */
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b">
+                <tr>
+                  <th className="p-3 text-left text-[13px] font-medium text-gray-600">프로젝트명</th>
+                  <th className="p-3 text-left text-[13px] font-medium text-gray-600 w-24">카테고리</th>
+                  <th className="p-3 text-left text-[13px] font-medium text-gray-600 w-20">상태</th>
+                  <th className="p-3 text-left text-[13px] font-medium text-gray-600 w-20">우선순위</th>
+                  <th className="p-3 text-left text-[13px] font-medium text-gray-600 w-32">기간</th>
+                  <th className="p-3 text-left text-[13px] font-medium text-gray-600 w-24">담당자</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProjects.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-12 text-center text-gray-400">
+                      프로젝트가 없습니다
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProjects.map((project) => (
+                    <tr 
+                      key={project.id} 
+                      onClick={() => openEditModal(project)}
+                      className="border-b hover:bg-gray-50 cursor-pointer"
+                    >
+                      <td className="p-3">
+                        <div className="text-[14px] font-medium text-gray-800">{project.name}</div>
+                        {project.description && (
+                          <div className="text-[12px] text-gray-400 truncate max-w-xs">{project.description}</div>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {project.category && (
+                          <span className="text-[12px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded">
+                            {project.category}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <span className={`text-[12px] px-2 py-1 rounded-full ${STATUS_CONFIG[project.status].color}`}>
+                          {STATUS_CONFIG[project.status].label}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`text-[11px] px-2 py-0.5 rounded ${PRIORITY_CONFIG[project.priority].color}`}>
+                          {PRIORITY_CONFIG[project.priority].label}
+                        </span>
+                      </td>
+                      <td className="p-3 text-[12px] text-gray-500">
+                        {formatDateRange(project.start_date, project.end_date)}
+                      </td>
+                      <td className="p-3">
+                        {project.assignees && project.assignees.length > 0 && (
+                          <div className="flex -space-x-1">
+                            {project.assignees.slice(0, 2).map((assigneeId, i) => {
+                              const member = members.find(m => m.id === assigneeId)
+                              return (
+                                <div 
+                                  key={i}
+                                  className="w-6 h-6 rounded-full text-white text-[10px] flex items-center justify-center border-2 border-white"
+                                  style={{ backgroundColor: '#5677b0' }}
+                                  title={member?.name || ''}
+                                >
+                                  {member?.name?.charAt(0) || '?'}
+                                </div>
+                              )
+                            })}
+                            {project.assignees.length > 2 && (
+                              <span className="text-[11px] text-gray-400 ml-1">+{project.assignees.length - 2}</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </ContentArea>
 
       {/* 모달 */}

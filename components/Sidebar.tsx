@@ -48,9 +48,13 @@ const menuItems: MenuItem[] = [
     icon: '📋', 
     label: '프로젝트',
     subMenus: [
-      { id: 'board', label: '칸반 보드' },
-      { id: 'list', label: '목록 보기' },
-      { id: 'my', label: '내 프로젝트' },
+      { id: 'all', label: '전체' },
+      { id: 'dev', label: '개발' },
+      { id: 'marketing', label: '마케팅' },
+      { id: 'design', label: '디자인' },
+      { id: 'planning', label: '기획' },
+      { id: 'video', label: '영상' },
+      { id: 'other', label: '기타' },
     ]
   },
   { 

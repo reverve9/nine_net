@@ -1,6 +1,6 @@
 {
   "name": "nine-net",
-  "version": "1.0.0",
+  "version": "0.1.0-beta",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -9,10 +9,10 @@
     "start": "next start",
     "lint": "next lint",
     "electron:dev": "electron .",
-    "electron:build": "electron-builder",
-    "electron:build:mac": "electron-builder --mac",
-    "electron:build:win": "electron-builder --win",
-    "electron:build:all": "electron-builder --mac --win"
+    "electron:build": "npm run build && electron-builder",
+    "electron:build:mac": "npm run build && electron-builder --mac",
+    "electron:build:win": "npm run build && electron-builder --win",
+    "electron:build:all": "npm run build && electron-builder --mac --win"
   },
   "dependencies": {
     "next": "14.1.0",
@@ -36,13 +36,14 @@
     "electron-builder": "^24.9.1"
   },
   "build": {
-    "appId": "com.company.ninenet",
+    "appId": "com.ninecommerce.ninenet",
     "productName": "Nine Net",
     "directories": {
       "output": "dist-electron"
     },
     "files": [
       "electron/**/*",
+      "out/**/*",
       "public/**/*"
     ],
     "mac": {
@@ -51,7 +52,11 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": ["universal"]
+        },
+        {
+          "target": "zip",
+          "arch": ["universal"]
         }
       ]
     },
@@ -66,12 +71,15 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     },
     "publish": {
       "provider": "github",
       "owner": "reverve9",
-      "repo": "nine_net"
+      "repo": "nine_net",
+      "releaseType": "draft"
     }
   }
 }
