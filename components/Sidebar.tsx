@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ProfileModal from './ProfileModal'
 
 type PageType = 'dashboard' | 'schedule' | 'project' | 'board' | 'approval' | 'partnership' | 'admin'
@@ -112,7 +112,39 @@ export default function Sidebar({
   onLogout,
 }: SidebarProps) {
   const [showProfileModal, setShowProfileModal] = useState(false)
+  const [appVersion, setAppVersion] = useState('')
+  const [updateStatus, setUpdateStatus] = useState<any>(null)
   const isAdmin = profile?.role === 'super_admin'
+  const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron
+
+  // 앱 버전 및 업데이트 상태 리스너
+  useEffect(() => {
+    if (isElectron && window.electronAPI) {
+      // 버전 가져오기
+      window.electronAPI.getAppVersion().then(setAppVersion)
+      
+      // 업데이트 상태 리스너
+      window.electronAPI.onUpdateStatus((data) => {
+        setUpdateStatus(data)
+      })
+
+      return () => {
+        window.electronAPI?.removeUpdateListener()
+      }
+    }
+  }, [isElectron])
+
+  const handleCheckUpdate = () => {
+    if (window.electronAPI) {
+      window.electronAPI.checkForUpdate()
+    }
+  }
+
+  const handleInstallUpdate = () => {
+    if (window.electronAPI) {
+      window.electronAPI.installUpdate()
+    }
+  }
 
   const currentMenuItem = menuItems.find(item => item.id === currentPage)
 
@@ -229,6 +261,44 @@ export default function Sidebar({
                 )}
               </div>
             </div>
+            
+            {/* 업데이트 영역 (Electron only) */}
+            {isElectron && (
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <div className="flex items-center justify-between text-[11px] text-gray-400 mb-2">
+                  <span>v{appVersion || '...'}</span>
+                  {updateStatus?.status === 'ready' ? (
+                    <button
+                      onClick={handleInstallUpdate}
+                      className="text-green-500 hover:text-green-600 font-medium"
+                    >
+                      재시작하여 설치
+                    </button>
+                  ) : updateStatus?.status === 'checking' || updateStatus?.status === 'downloading' ? (
+                    <span className="text-blue-500">
+                      {updateStatus.status === 'downloading' 
+                        ? `${Math.round(updateStatus.percent || 0)}%` 
+                        : '확인중...'}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleCheckUpdate}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      업데이트 확인
+                    </button>
+                  )}
+                </div>
+                {updateStatus?.message && updateStatus.status !== 'idle' && (
+                  <p className={`text-[10px] ${
+                    updateStatus.status === 'error' ? 'text-red-400' : 
+                    updateStatus.status === 'ready' ? 'text-green-500' : 'text-gray-400'
+                  }`}>
+                    {updateStatus.message}
+                  </p>
+                )}
+              </div>
+            )}
             
             <button
               onClick={onLogout}

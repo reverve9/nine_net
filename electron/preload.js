@@ -13,4 +13,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   selectFile: () => ipcRenderer.invoke('select-file'),
   // 파일 경로 열기
   openPath: (filePath) => ipcRenderer.send('open-path', filePath),
+  // 업데이트
+  checkForUpdate: () => ipcRenderer.send('check-for-update'),
+  installUpdate: () => ipcRenderer.send('install-update'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  onUpdateStatus: (callback) => {
+    ipcRenderer.on('update-status', (event, data) => callback(data));
+  },
+  removeUpdateListener: () => {
+    ipcRenderer.removeAllListeners('update-status');
+  },
 });

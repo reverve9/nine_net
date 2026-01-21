@@ -15,6 +15,20 @@ declare global {
       openPath: (filePath: string) => void
       onLogout: () => void
       onLogin: () => void
+      // 업데이트
+      checkForUpdate: () => void
+      installUpdate: () => void
+      getAppVersion: () => Promise<string>
+      onUpdateStatus: (callback: (data: UpdateStatus) => void) => void
+      removeUpdateListener: () => void
     }
+  }
+
+  interface UpdateStatus {
+    status: 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'error' | 'dev-mode'
+    message?: string
+    version?: string
+    percent?: number
+    error?: string
   }
 }
