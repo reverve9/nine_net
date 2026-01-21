@@ -11,6 +11,61 @@ const baseUrl = isDev ? 'http://localhost:3000' : 'https://nine-net.vercel.app';
 // 업데이트 상태
 let updateStatus = 'idle'; // idle, checking, available, downloading, ready, error
 
+// 로딩 HTML
+const loadingHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      -webkit-app-region: drag;
+    }
+    .logo {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+    .title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 30px;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .status {
+      margin-top: 20px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">🏢</div>
+  <div class="title">Nine Net</div>
+  <div class="spinner"></div>
+  <div class="status">연결 중...</div>
+</body>
+</html>
+`;
+
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -28,9 +83,72 @@ function createMainWindow() {
     frame: true,
     transparent: false,
     icon: path.join(__dirname, '../public/icon-512.png'),
+    show: false, // 처음에 숨김
   });
 
-  mainWindow.loadURL(baseUrl);
+  // 로딩 화면 먼저 표시
+  mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHTML)}`);
+  mainWindow.show();
+
+  // 실제 URL 로드
+  let loadAttempts = 0;
+  const maxAttempts = 3;
+
+  const loadMainUrl = () => {
+    loadAttempts++;
+    mainWindow.loadURL(baseUrl);
+  };
+
+  // 약간의 딜레이 후 메인 URL 로드
+  setTimeout(loadMainUrl, 500);
+
+  // 로드 실패 시 재시도
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.log(`로드 실패 (${loadAttempts}/${maxAttempts}):`, errorDescription);
+    
+    if (loadAttempts < maxAttempts) {
+      setTimeout(loadMainUrl, 2000); // 2초 후 재시도
+    } else {
+      // 최대 시도 후 에러 페이지 표시
+      mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: center;
+              height: 100vh;
+              background: #f5f5f5;
+              color: #333;
+            }
+            h1 { font-size: 24px; margin-bottom: 10px; }
+            p { color: #666; margin-bottom: 20px; }
+            button {
+              padding: 10px 20px;
+              background: #5677b0;
+              color: white;
+              border: none;
+              border-radius: 8px;
+              cursor: pointer;
+              font-size: 14px;
+            }
+            button:hover { opacity: 0.9; }
+          </style>
+        </head>
+        <body>
+          <h1>연결할 수 없습니다</h1>
+          <p>인터넷 연결을 확인해주세요.</p>
+          <button onclick="location.reload()">다시 시도</button>
+        </body>
+        </html>
+      `)}`);
+    }
+  });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
