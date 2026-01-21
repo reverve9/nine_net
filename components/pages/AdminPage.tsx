@@ -138,11 +138,11 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
 
   const getRoleName = (role: string) => {
     switch (role) {
-      case 'super_admin': return '대표'
-      case 'fin_admin': return '회계담당자'
-      case 'user': return '일반 직원'
-      case 'guest': return '외부 스탭'
-      default: return role || '일반 직원'
+      case 'owner': return '대표'
+      case 'accountant': return '회계'
+      case 'employee': return '직원'
+      case 'guest': return '게스트'
+      default: return role || '직원'
     }
   }
 
@@ -163,11 +163,11 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
   }
 
   // 권한 체크
-  if (profile?.role !== 'super_admin') {
+  if (profile?.role !== 'owner') {
     return (
       <div className="p-8">
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-600">
-          접근 권한이 없습니다. 대표 관리자만 접근 가능합니다.
+          접근 권한이 없습니다. 대표만 접근 가능합니다.
         </div>
       </div>
     )
@@ -265,14 +265,14 @@ export default function AdminPage({ user, profile }: AdminPageProps) {
                     <span className="text-sm text-gray-600">{getRoleName(u.role)}</span>
                   ) : (
                     <select
-                      value={u.role || 'user'}
+                      value={u.role || 'employee'}
                       onChange={(e) => updateUserRole(u.id, e.target.value)}
                       className="text-sm border border-gray-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-300"
                     >
-                      <option value="super_admin">대표</option>
-                      <option value="fin_admin">회계담당자</option>
-                      <option value="user">일반 직원</option>
-                      <option value="guest">외부 스탭</option>
+                      <option value="owner">대표</option>
+                      <option value="accountant">회계</option>
+                      <option value="employee">직원</option>
+                      <option value="guest">게스트</option>
                     </select>
                   )}
                 </td>

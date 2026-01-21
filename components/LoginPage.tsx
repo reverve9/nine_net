@@ -79,11 +79,14 @@ export default function LoginPage({ initialMessage }: LoginPageProps) {
       return
     }
 
-    // 프로필에 pending 상태 설정
+    // 프로필에 pending 상태 및 기본 role 설정
     if (data.user) {
       await supabase
         .from('profiles')
-        .update({ approval_status: 'pending' })
+        .update({ 
+          approval_status: 'pending',
+          role: 'employee'
+        })
         .eq('id', data.user.id)
       
       // 자동 로그인 방지 - 즉시 로그아웃

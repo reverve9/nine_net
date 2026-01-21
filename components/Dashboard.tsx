@@ -13,9 +13,10 @@ import ProjectSchedulePage from './pages/ProjectSchedulePage'
 import ProjectPage from './pages/ProjectPage'
 import BoardPage from './pages/BoardPage'
 import ApprovalPage from './pages/ApprovalPage'
+import AccountingPage from './pages/AccountingPage'
 import AdminPage from './pages/AdminPage'
 
-type PageType = 'dashboard' | 'schedule' | 'project' | 'board' | 'approval' | 'partnership' | 'admin'
+type PageType = 'dashboard' | 'schedule' | 'project' | 'board' | 'approval' | 'partnership' | 'accounting' | 'admin'
 
 interface DashboardProps {
   user: any
@@ -82,6 +83,8 @@ export default function Dashboard({ user }: DashboardProps) {
         return <BoardPage user={user} />
       case 'approval':
         return <ApprovalPage user={user} profile={profile} subMenu={currentSubMenu} />
+      case 'accounting':
+        return <AccountingPage user={user} profile={profile} subMenu={currentSubMenu} />
       case 'admin':
         return <AdminPage user={user} profile={profile} />
       default:

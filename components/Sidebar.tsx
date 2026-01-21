@@ -3,14 +3,17 @@
 import { useState, useEffect } from 'react'
 import ProfileModal from './ProfileModal'
 
-type PageType = 'dashboard' | 'schedule' | 'project' | 'board' | 'approval' | 'partnership' | 'admin'
+type PageType = 'dashboard' | 'schedule' | 'project' | 'board' | 'approval' | 'partnership' | 'accounting' | 'admin'
 type SubMenuType = string
+type RoleType = 'owner' | 'accountant' | 'employee' | 'guest'
 
 interface MenuItem {
   id: PageType
   icon: string
   label: string
-  adminOnly?: boolean
+  ownerOnly?: boolean      // 대표만
+  accountingOnly?: boolean // 대표 + 회계만
+  guestAllowed?: boolean   // 게스트도 허용
   subMenus?: { id: SubMenuType; label: string }[]
 }
 
@@ -47,6 +50,7 @@ const menuItems: MenuItem[] = [
     id: 'project', 
     icon: '📋', 
     label: '프로젝트',
+    guestAllowed: true,
     subMenus: [
       { id: 'all', label: '전체' },
       { id: 'dev', label: '개발' },
@@ -89,10 +93,21 @@ const menuItems: MenuItem[] = [
     ]
   },
   { 
+    id: 'accounting', 
+    icon: '💰', 
+    label: '회계',
+    accountingOnly: true,
+    subMenus: [
+      { id: 'expense', label: '지출 내역' },
+      { id: 'revenue', label: '매출 현황' },
+      { id: 'budget', label: '예산 관리' },
+    ]
+  },
+  { 
     id: 'admin', 
     icon: '⚙️', 
     label: '관리', 
-    adminOnly: true,
+    ownerOnly: true,
     subMenus: [
       { id: 'users', label: '사용자 관리' },
       { id: 'company', label: '회사 정보' },
@@ -114,8 +129,25 @@ export default function Sidebar({
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [appVersion, setAppVersion] = useState('')
   const [updateStatus, setUpdateStatus] = useState<any>(null)
-  const isAdmin = profile?.role === 'super_admin'
+  
+  const role = profile?.role as RoleType
+  const isOwner = role === 'owner'
+  const isAccountant = role === 'accountant'
+  const isEmployee = role === 'employee'
+  const isGuest = role === 'guest'
+  
   const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron
+
+  // 메뉴 필터링
+  const filteredMenuItems = menuItems.filter(item => {
+    // 대표 전용
+    if (item.ownerOnly && !isOwner) return false
+    // 회계 전용 (대표 + 회계만)
+    if (item.accountingOnly && !isOwner && !isAccountant) return false
+    // 게스트는 guestAllowed만
+    if (isGuest && !item.guestAllowed) return false
+    return true
+  })
 
   // 앱 버전 및 업데이트 상태 리스너
   useEffect(() => {
@@ -150,8 +182,8 @@ export default function Sidebar({
 
   const getRoleBadge = (role: string) => {
     switch (role) {
-      case 'super_admin': return '대표'
-      case 'fin_admin': return '회계'
+      case 'owner': return '대표'
+      case 'accountant': return '회계'
       case 'guest': return '외부'
       default: return null
     }
@@ -179,9 +211,7 @@ export default function Sidebar({
             className="flex-1 flex flex-col gap-0.5 w-full px-1.5"
             style={{ WebkitAppRegion: 'no-drag' } as any}
           >
-            {menuItems
-              .filter(item => !item.adminOnly || isAdmin)
-              .map((item) => (
+            {filteredMenuItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => handleMenuClick(item)}

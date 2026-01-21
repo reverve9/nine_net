@@ -21,47 +21,27 @@ const loadingHTML = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: #ffffff;
       height: 100vh;
       display: flex;
-      flex-direction: column;
       align-items: center;
       justify-content: center;
-      color: white;
-      -webkit-app-region: drag;
-    }
-    .logo {
-      font-size: 48px;
-      margin-bottom: 20px;
-    }
-    .title {
-      font-size: 24px;
-      font-weight: 600;
-      margin-bottom: 30px;
     }
     .spinner {
-      width: 40px;
-      height: 40px;
-      border: 3px solid rgba(255,255,255,0.3);
-      border-top-color: white;
+      width: 32px;
+      height: 32px;
+      border: 3px solid #e5e5e5;
+      border-top-color: #5677b0;
       border-radius: 50%;
-      animation: spin 1s linear infinite;
+      animation: spin 0.8s linear infinite;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    .status {
-      margin-top: 20px;
-      font-size: 14px;
-      opacity: 0.8;
-    }
   </style>
 </head>
 <body>
-  <div class="logo">🏢</div>
-  <div class="title">Nine Net</div>
   <div class="spinner"></div>
-  <div class="status">연결 중...</div>
 </body>
 </html>
 `;
