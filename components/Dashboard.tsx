@@ -9,6 +9,7 @@ import FloatingChat from './FloatingChat'
 import DashboardPage from './pages/DashboardPage'
 import PartnershipPage from './pages/PartnershipPage'
 import SchedulePage from './pages/SchedulePage'
+import ProjectSchedulePage from './pages/ProjectSchedulePage'
 import ProjectPage from './pages/ProjectPage'
 import BoardPage from './pages/BoardPage'
 import ApprovalPage from './pages/ApprovalPage'
@@ -71,13 +72,16 @@ export default function Dashboard({ user }: DashboardProps) {
       case 'partnership':
         return <PartnershipPage user={user} profile={profile} subMenu={currentSubMenu} />
       case 'schedule':
-        return <SchedulePage user={user} />
+        if (currentSubMenu === 'project') {
+          return <ProjectSchedulePage user={user} profile={profile} />
+        }
+        return <SchedulePage user={user} profile={profile} subMenu={currentSubMenu} />
       case 'project':
         return <ProjectPage user={user} profile={profile} />
       case 'board':
         return <BoardPage user={user} />
       case 'approval':
-        return <ApprovalPage user={user} profile={profile} />
+        return <ApprovalPage user={user} profile={profile} subMenu={currentSubMenu} />
       case 'admin':
         return <AdminPage user={user} profile={profile} />
       default:

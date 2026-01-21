@@ -39,9 +39,8 @@ const menuItems: MenuItem[] = [
     icon: '📅', 
     label: '일정',
     subMenus: [
-      { id: 'calendar', label: '캘린더' },
-      { id: 'my', label: '내 일정' },
-      { id: 'team', label: '팀 일정' },
+      { id: 'calendar', label: '월간 일정표' },
+      { id: 'project', label: '프로젝트 일정' },
     ]
   },
   { 
@@ -68,10 +67,10 @@ const menuItems: MenuItem[] = [
     icon: '✅', 
     label: '결재',
     subMenus: [
-      { id: 'pending', label: '대기중' },
-      { id: 'approved', label: '승인됨' },
-      { id: 'rejected', label: '반려됨' },
-      { id: 'my', label: '내 요청' },
+      { id: 'draft', label: '기안함' },
+      { id: 'inbox', label: '결재함' },
+      { id: 'reference', label: '열람/공람' },
+      { id: 'certificate', label: '증명서 신청' },
     ]
   },
   { 

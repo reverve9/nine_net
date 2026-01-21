@@ -6,6 +6,9 @@ interface FloatingChatProps {
   user: any
 }
 
+// 메신저앱 URL (배포 시 환경변수로 변경)
+const MESSENGER_URL = process.env.NEXT_PUBLIC_MESSENGER_URL || 'http://localhost:3001'
+
 export default function FloatingChat({ user }: FloatingChatProps) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [isElectron, setIsElectron] = useState(false)
@@ -16,15 +19,16 @@ export default function FloatingChat({ user }: FloatingChatProps) {
 
   const handleButtonClick = () => {
     if (isElectron && window.electronAPI) {
-      window.electronAPI.toggleMessenger()
+      // Electron: 메신저앱 실행
+      window.electronAPI.openMessengerApp()
     } else {
-      // 웹: 새 창으로 메신저 열기 (Electron과 동일 사이즈)
+      // 웹: 메신저앱 새 창으로 열기
       const width = 400
       const height = 600
       const left = window.screen.width - width - 20
       const top = 80
       window.open(
-        '/messenger',
+        MESSENGER_URL,
         'messenger',
         `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=no`
       )
@@ -36,7 +40,9 @@ export default function FloatingChat({ user }: FloatingChatProps) {
       {/* 플로팅 버튼 */}
       <button
         onClick={handleButtonClick}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition flex items-center justify-center z-50"
+        className="fixed bottom-6 right-6 w-14 h-14 text-white rounded-full shadow-lg hover:opacity-90 transition flex items-center justify-center z-50"
+        style={{ backgroundColor: '#5677b0' }}
+        title="메신저 열기"
       >
         <span className="text-2xl">💬</span>
         {unreadCount > 0 && (
@@ -48,3 +54,4 @@ export default function FloatingChat({ user }: FloatingChatProps) {
     </>
   )
 }
+

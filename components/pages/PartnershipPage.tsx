@@ -16,6 +16,8 @@ interface Company {
   is_important: boolean
   created_at: string
   primary_contact?: CompanyContact | null
+  business_license_url: string | null
+  bankbook_url: string | null
 }
 
 interface CompanyContact {
@@ -161,6 +163,133 @@ const SafeTextarea = ({
   )
 }
 
+// 파일 미리보기 모달 컴포넌트
+const FilePreviewModal = ({
+  url,
+  fileName,
+  onClose
+}: {
+  url: string
+  fileName: string
+  onClose: () => void
+}) => {
+  const [scale, setScale] = useState(1)
+  const isPdf = url.toLowerCase().includes('.pdf')
+  
+  const zoomIn = () => setScale(prev => Math.min(prev + 0.25, 3))
+  const zoomOut = () => setScale(prev => Math.max(prev - 0.25, 0.5))
+  const resetZoom = () => setScale(1)
+
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(url)
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = fileName || 'download'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(downloadUrl)
+    } catch (error) {
+      console.error('다운로드 실패:', error)
+      alert('다운로드에 실패했습니다.')
+    }
+  }
+
+  return (
+    <div 
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60]"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-xl w-full max-w-5xl max-h-[95vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 헤더 */}
+        <div className="flex items-center justify-between px-4 py-3 border-b bg-gray-50">
+          <h3 className="text-sm font-bold text-gray-800">{fileName}</h3>
+          <div className="flex items-center gap-2">
+            {/* 확대/축소 컨트롤 (이미지만) */}
+            {!isPdf && (
+              <div className="flex items-center gap-1 mr-2">
+                <button
+                  onClick={zoomOut}
+                  disabled={scale <= 0.5}
+                  className="w-8 h-8 flex items-center justify-center text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="축소"
+                >
+                  ➖
+                </button>
+                <button
+                  onClick={resetZoom}
+                  className="px-2 h-8 flex items-center justify-center text-[12px] text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 min-w-[50px]"
+                  title="원본 크기"
+                >
+                  {Math.round(scale * 100)}%
+                </button>
+                <button
+                  onClick={zoomIn}
+                  disabled={scale >= 3}
+                  className="w-8 h-8 flex items-center justify-center text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                  title="확대"
+                >
+                  ➕
+                </button>
+              </div>
+            )}
+            
+            {/* 다운로드 버튼 */}
+            <button
+              onClick={handleDownload}
+              className="px-3 py-1.5 text-[12px] text-white bg-blue-500 rounded-lg hover:bg-blue-600 flex items-center gap-1"
+            >
+              <span>⬇️</span>
+              <span>다운로드</span>
+            </button>
+            
+            {/* 닫기 버튼 */}
+            <button 
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+        
+        {/* 컨텐츠 */}
+        <div className="flex-1 overflow-auto bg-gray-200 p-4">
+          {isPdf ? (
+            <iframe
+              src={url}
+              className="w-full h-[80vh] bg-white rounded-lg"
+              title={fileName}
+            />
+          ) : (
+            <div 
+              className="flex items-center justify-center min-h-[60vh]"
+              style={{ cursor: scale > 1 ? 'grab' : 'default' }}
+            >
+              <img
+                src={url}
+                alt={fileName}
+                className="max-w-full transition-transform duration-200"
+                style={{ 
+                  transform: `scale(${scale})`,
+                  transformOrigin: 'center center'
+                }}
+                draggable={false}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // 테이블 컴포넌트
 const DataTable = ({ 
   headers, 
@@ -271,6 +400,171 @@ const Pagination = ({
 
 const ITEMS_PER_PAGE = 10
 
+type ViewMode = 'list' | 'card'
+
+// 뷰 모드 토글 버튼
+const ViewModeToggle = ({ 
+  viewMode, 
+  setViewMode 
+}: { 
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void 
+}) => (
+  <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
+    <button
+      onClick={() => setViewMode('list')}
+      className={`px-2.5 py-1 rounded-md text-[12px] transition ${
+        viewMode === 'list' 
+          ? 'bg-white text-blue-600 shadow-sm' 
+          : 'text-gray-500 hover:text-gray-700'
+      }`}
+      title="리스트 보기"
+    >
+      ☰
+    </button>
+    <button
+      onClick={() => setViewMode('card')}
+      className={`px-2.5 py-1 rounded-md text-[12px] transition ${
+        viewMode === 'card' 
+          ? 'bg-white text-blue-600 shadow-sm' 
+          : 'text-gray-500 hover:text-gray-700'
+      }`}
+      title="카드 보기"
+    >
+      ▦
+    </button>
+  </div>
+)
+
+// 기업 카드 컴포넌트
+const CompanyCard = ({ 
+  company, 
+  onClick, 
+  onToggleImportant 
+}: { 
+  company: Company
+  onClick: () => void
+  onToggleImportant: (e: React.MouseEvent) => void
+}) => (
+  <div 
+    onClick={onClick}
+    className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-300 cursor-pointer transition"
+  >
+    <div className="flex items-start justify-between mb-2">
+      <h3 className="font-semibold text-gray-800 text-[14px]">{company.name}</h3>
+      <button
+        onClick={onToggleImportant}
+        className={`text-base ${company.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+      >
+        ⭐
+      </button>
+    </div>
+    <div className="space-y-1 text-[12px]">
+      <p className="text-gray-500">
+        <span className="text-gray-400">대표:</span> {company.ceo_name || '-'}
+      </p>
+      <p className="text-gray-500">
+        <span className="text-gray-400">업종:</span> {company.business_type || '-'}
+      </p>
+      <p className="text-gray-500 truncate">
+        <span className="text-gray-400">주소:</span> {company.address || '-'}
+      </p>
+      {company.primary_contact && (
+        <p className="text-blue-600 mt-2">
+          <span className="text-gray-400">담당:</span> {company.primary_contact.name} {company.primary_contact.phone && `(${company.primary_contact.phone})`}
+        </p>
+      )}
+    </div>
+    {(company.business_license_url || company.bankbook_url) && (
+      <div className="flex gap-1 mt-3 pt-2 border-t">
+        {company.business_license_url && <span className="text-[10px] px-1.5 py-0.5 bg-green-100 text-green-600 rounded">📄 사업자등록증</span>}
+        {company.bankbook_url && <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded">📄 통장사본</span>}
+      </div>
+    )}
+  </div>
+)
+
+// 기관 카드 컴포넌트
+const OrganizationCard = ({ 
+  organization, 
+  onClick, 
+  onToggleImportant 
+}: { 
+  organization: Organization
+  onClick: () => void
+  onToggleImportant: (e: React.MouseEvent) => void
+}) => (
+  <div 
+    onClick={onClick}
+    className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-300 cursor-pointer transition"
+  >
+    <div className="flex items-start justify-between mb-2">
+      <h3 className="font-semibold text-gray-800 text-[14px]">{organization.name}</h3>
+      <button
+        onClick={onToggleImportant}
+        className={`text-base ${organization.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+      >
+        ⭐
+      </button>
+    </div>
+    <div className="space-y-1 text-[12px]">
+      <p className="text-gray-500 truncate">
+        <span className="text-gray-400">주소:</span> {organization.address || '-'}
+      </p>
+      <p className="text-gray-500">
+        <span className="text-gray-400">전화:</span> {organization.phone || '-'}
+      </p>
+      {organization.primary_contact && (
+        <p className="text-blue-600 mt-2">
+          <span className="text-gray-400">담당:</span> {organization.primary_contact.name} {organization.primary_contact.phone && `(${organization.primary_contact.phone})`}
+        </p>
+      )}
+    </div>
+  </div>
+)
+
+// 개인 카드 컴포넌트
+const PersonalCard = ({ 
+  personal, 
+  onClick, 
+  onToggleImportant 
+}: { 
+  personal: PersonalContact
+  onClick: () => void
+  onToggleImportant: (e: React.MouseEvent) => void
+}) => (
+  <div 
+    onClick={onClick}
+    className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-blue-300 cursor-pointer transition"
+  >
+    <div className="flex items-start justify-between mb-2">
+      <div>
+        <h3 className="font-semibold text-gray-800 text-[14px]">{personal.name}</h3>
+        {personal.position && <p className="text-[11px] text-gray-400">{personal.position}</p>}
+      </div>
+      <button
+        onClick={onToggleImportant}
+        className={`text-base ${personal.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+      >
+        ⭐
+      </button>
+    </div>
+    <div className="space-y-1 text-[12px]">
+      <p className="text-gray-500">
+        <span className="text-gray-400">전화:</span> {personal.phone || '-'}
+      </p>
+      <p className="text-gray-500">
+        <span className="text-gray-400">이메일:</span> {personal.email || '-'}
+      </p>
+      {personal.company_name && (
+        <p className="text-blue-600 mt-2">
+          <span className="text-gray-400">회사:</span> {personal.company_name}
+        </p>
+      )}
+    </div>
+  </div>
+)
+
 export default function PartnershipPage({ user, profile, subMenu }: PartnershipPageProps) {
   const [companies, setCompanies] = useState<Company[]>([])
   const [organizations, setOrganizations] = useState<Organization[]>([])
@@ -282,6 +576,7 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
 
   // 모달 상태
   const [showCompanyModal, setShowCompanyModal] = useState(false)
@@ -341,6 +636,14 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
     memo: '',
   })
   const [editingOrgContact, setEditingOrgContact] = useState<OrganizationContact | null>(null)
+
+  // 파일 업로드 상태
+  const [uploadingFile, setUploadingFile] = useState<'business_license' | 'bankbook' | null>(null)
+  const [showFilePreview, setShowFilePreview] = useState(false)
+  const [previewFileUrl, setPreviewFileUrl] = useState<string | null>(null)
+  const [previewFileName, setPreviewFileName] = useState<string>('')
+  const businessLicenseInputRef = useRef<HTMLInputElement>(null)
+  const bankbookInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetchData()
@@ -438,6 +741,117 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
       .order('sort_order')
     
     if (data) setOrganizationContacts(data)
+  }
+
+  // 파일 업로드 함수
+  const handleFileUpload = async (file: File, type: 'business_license' | 'bankbook') => {
+    if (!selectedCompany) return
+    
+    setUploadingFile(type)
+    
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${selectedCompany.id}/${type}_${Date.now()}.${fileExt}`
+      
+      // 기존 파일 삭제
+      const existingUrl = type === 'business_license' 
+        ? selectedCompany.business_license_url 
+        : selectedCompany.bankbook_url
+      
+      if (existingUrl) {
+        // URL에서 파일 경로 추출
+        const match = existingUrl.match(/company-docs\/(.+)\?/)
+        if (match) {
+          await supabase.storage.from('company-docs').remove([match[1]])
+        }
+      }
+      
+      // 새 파일 업로드
+      const { error: uploadError } = await supabase.storage
+        .from('company-docs')
+        .upload(fileName, file)
+      
+      if (uploadError) throw uploadError
+      
+      // Signed URL 생성 (1년 유효)
+      const { data: signedData, error: signedError } = await supabase.storage
+        .from('company-docs')
+        .createSignedUrl(fileName, 60 * 60 * 24 * 365)
+      
+      if (signedError) throw signedError
+      
+      // DB 업데이트
+      const updateData = type === 'business_license' 
+        ? { business_license_url: signedData.signedUrl }
+        : { bankbook_url: signedData.signedUrl }
+      
+      await supabase
+        .from('companies')
+        .update(updateData)
+        .eq('id', selectedCompany.id)
+      
+      // 상태 업데이트
+      setSelectedCompany({
+        ...selectedCompany,
+        ...updateData
+      })
+      
+      // 리스트 갱신
+      fetchData()
+      
+    } catch (error) {
+      console.error('파일 업로드 실패:', error)
+      alert('파일 업로드에 실패했습니다.')
+    } finally {
+      setUploadingFile(null)
+    }
+  }
+
+  // 파일 삭제 함수
+  const handleFileDelete = async (type: 'business_license' | 'bankbook') => {
+    if (!selectedCompany) return
+    if (!confirm('파일을 삭제하시겠습니까?')) return
+    
+    try {
+      const url = type === 'business_license' 
+        ? selectedCompany.business_license_url 
+        : selectedCompany.bankbook_url
+      
+      if (url) {
+        // Signed URL에서 파일 경로 추출
+        const match = url.match(/company-docs\/(.+)\?/)
+        if (match) {
+          await supabase.storage.from('company-docs').remove([match[1]])
+        }
+      }
+      
+      const updateData = type === 'business_license'
+        ? { business_license_url: null }
+        : { bankbook_url: null }
+      
+      await supabase
+        .from('companies')
+        .update(updateData)
+        .eq('id', selectedCompany.id)
+      
+      setSelectedCompany({
+        ...selectedCompany,
+        ...updateData
+      })
+      
+      fetchData()
+      
+    } catch (error) {
+      console.error('파일 삭제 실패:', error)
+      alert('파일 삭제에 실패했습니다.')
+    }
+  }
+
+  // 파일 미리보기 함수
+  const openFilePreview = async (url: string, name: string) => {
+    setPreviewFileName(name)
+    setPreviewFileUrl(url)
+    setShowFilePreview(true)
   }
 
   // 기업 CRUD
@@ -812,6 +1226,7 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
       <div className="p-4 h-full flex flex-col">
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-lg font-bold text-gray-800">전체 파트너</h1>
+          <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
         </div>
 
         <div className="mb-3">
@@ -830,31 +1245,47 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-[13px] font-semibold text-gray-500">기업 ({filteredCompanies.length})</h2>
             </div>
-            <DataTable headers={companyHeaders} emptyMessage="등록된 기업이 없습니다">
-              {filteredCompanies.slice(0, 5).map(company => (
-                <tr 
-                  key={company.id} 
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => openCompanyDetail(company)}
-                >
-                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => toggleCompanyImportant(company, e)}
-                      className={`text-base ${company.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                    >
-                      ⭐
-                    </button>
-                  </td>
-                  <td className="px-3 py-2.5 font-medium text-gray-800">{company.name}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{company.ceo_name || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600 truncate max-w-[150px]">{company.address || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{company.business_type || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{company.business_number || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{company.primary_contact?.name || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{company.primary_contact?.phone || '-'}</td>
-                </tr>
-              ))}
-            </DataTable>
+            {viewMode === 'list' ? (
+              <DataTable headers={companyHeaders} emptyMessage="등록된 기업이 없습니다">
+                {filteredCompanies.slice(0, 5).map(company => (
+                  <tr 
+                    key={company.id} 
+                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => openCompanyDetail(company)}
+                  >
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => toggleCompanyImportant(company, e)}
+                        className={`text-base ${company.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                      >
+                        ⭐
+                      </button>
+                    </td>
+                    <td className="px-3 py-2.5 font-medium text-gray-800">{company.name}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{company.ceo_name || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600 truncate max-w-[150px]">{company.address || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{company.business_type || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{company.business_number || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{company.primary_contact?.name || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{company.primary_contact?.phone || '-'}</td>
+                  </tr>
+                ))}
+              </DataTable>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {filteredCompanies.slice(0, 8).map(company => (
+                  <CompanyCard
+                    key={company.id}
+                    company={company}
+                    onClick={() => openCompanyDetail(company)}
+                    onToggleImportant={(e) => toggleCompanyImportant(company, e)}
+                  />
+                ))}
+                {filteredCompanies.length === 0 && (
+                  <p className="col-span-full text-center text-gray-400 py-8 text-[13px]">등록된 기업이 없습니다</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 기관 섹션 */}
@@ -862,29 +1293,45 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-[13px] font-semibold text-gray-500">기관 ({filteredOrganizations.length})</h2>
             </div>
-            <DataTable headers={organizationHeaders} emptyMessage="등록된 기관이 없습니다">
-              {filteredOrganizations.slice(0, 5).map(org => (
-                <tr 
-                  key={org.id} 
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => openOrganizationDetail(org)}
-                >
-                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => toggleOrganizationImportant(org, e)}
-                      className={`text-base ${org.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                    >
-                      ⭐
-                    </button>
-                  </td>
-                  <td className="px-3 py-2.5 font-medium text-gray-800">{org.name}</td>
-                  <td className="px-3 py-2.5 text-gray-600 truncate max-w-[150px]">{org.address || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{org.phone || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{org.primary_contact?.name || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{org.primary_contact?.phone || '-'}</td>
-                </tr>
-              ))}
-            </DataTable>
+            {viewMode === 'list' ? (
+              <DataTable headers={organizationHeaders} emptyMessage="등록된 기관이 없습니다">
+                {filteredOrganizations.slice(0, 5).map(org => (
+                  <tr 
+                    key={org.id} 
+                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => openOrganizationDetail(org)}
+                  >
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => toggleOrganizationImportant(org, e)}
+                        className={`text-base ${org.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                      >
+                        ⭐
+                      </button>
+                    </td>
+                    <td className="px-3 py-2.5 font-medium text-gray-800">{org.name}</td>
+                    <td className="px-3 py-2.5 text-gray-600 truncate max-w-[150px]">{org.address || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{org.phone || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{org.primary_contact?.name || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{org.primary_contact?.phone || '-'}</td>
+                  </tr>
+                ))}
+              </DataTable>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {filteredOrganizations.slice(0, 8).map(org => (
+                  <OrganizationCard
+                    key={org.id}
+                    organization={org}
+                    onClick={() => openOrganizationDetail(org)}
+                    onToggleImportant={(e) => toggleOrganizationImportant(org, e)}
+                  />
+                ))}
+                {filteredOrganizations.length === 0 && (
+                  <p className="col-span-full text-center text-gray-400 py-8 text-[13px]">등록된 기관이 없습니다</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 개인 섹션 */}
@@ -892,29 +1339,45 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-[13px] font-semibold text-gray-500">개인 ({filteredPersonals.length})</h2>
             </div>
-            <DataTable headers={personalHeaders} emptyMessage="등록된 개인 연락처가 없습니다">
-              {filteredPersonals.slice(0, 5).map(personal => (
-                <tr 
-                  key={personal.id} 
-                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                  onClick={() => openPersonalDetail(personal)}
-                >
-                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={(e) => togglePersonalImportant(personal, e)}
-                      className={`text-base ${personal.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                    >
-                      ⭐
-                    </button>
-                  </td>
-                  <td className="px-3 py-2.5 font-medium text-gray-800">{personal.name}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{personal.position || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{personal.phone || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{personal.email || '-'}</td>
-                  <td className="px-3 py-2.5 text-gray-600">{personal.company_name || '-'}</td>
-                </tr>
-              ))}
-            </DataTable>
+            {viewMode === 'list' ? (
+              <DataTable headers={personalHeaders} emptyMessage="등록된 개인 연락처가 없습니다">
+                {filteredPersonals.slice(0, 5).map(personal => (
+                  <tr 
+                    key={personal.id} 
+                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => openPersonalDetail(personal)}
+                  >
+                    <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => togglePersonalImportant(personal, e)}
+                        className={`text-base ${personal.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                      >
+                        ⭐
+                      </button>
+                    </td>
+                    <td className="px-3 py-2.5 font-medium text-gray-800">{personal.name}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{personal.position || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{personal.phone || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{personal.email || '-'}</td>
+                    <td className="px-3 py-2.5 text-gray-600">{personal.company_name || '-'}</td>
+                  </tr>
+                ))}
+              </DataTable>
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {filteredPersonals.slice(0, 8).map(personal => (
+                  <PersonalCard
+                    key={personal.id}
+                    personal={personal}
+                    onClick={() => openPersonalDetail(personal)}
+                    onToggleImportant={(e) => togglePersonalImportant(personal, e)}
+                  />
+                ))}
+                {filteredPersonals.length === 0 && (
+                  <p className="col-span-full text-center text-gray-400 py-8 text-[13px]">등록된 개인 연락처가 없습니다</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -930,6 +1393,7 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-lg font-bold text-gray-800">기업</h1>
           <div className="flex items-center gap-3">
+            <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
             <Pagination currentPage={currentPage} totalPages={totalCompanyPages} onPageChange={setCurrentPage} />
             <button
               onClick={() => {
@@ -953,32 +1417,48 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
           />
         </div>
 
-        <div className="flex-1">
-          <DataTable headers={companyHeaders} emptyMessage="등록된 기업이 없습니다">
-            {paginatedCompanies.map(company => (
-              <tr 
-                key={company.id} 
-                className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                onClick={() => openCompanyDetail(company)}
-              >
-                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={(e) => toggleCompanyImportant(company, e)}
-                    className={`text-base ${company.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                  >
-                    ⭐
-                  </button>
-                </td>
-                <td className="px-3 py-2.5 font-medium text-gray-800">{company.name}</td>
-                <td className="px-3 py-2.5 text-gray-600">{company.ceo_name || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600 truncate max-w-[150px]">{company.address || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{company.business_type || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{company.business_number || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{company.primary_contact?.name || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{company.primary_contact?.phone || '-'}</td>
-              </tr>
-            ))}
-          </DataTable>
+        <div className="flex-1 overflow-auto">
+          {viewMode === 'list' ? (
+            <DataTable headers={companyHeaders} emptyMessage="등록된 기업이 없습니다">
+              {paginatedCompanies.map(company => (
+                <tr 
+                  key={company.id} 
+                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => openCompanyDetail(company)}
+                >
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={(e) => toggleCompanyImportant(company, e)}
+                      className={`text-base ${company.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                    >
+                      ⭐
+                    </button>
+                  </td>
+                  <td className="px-3 py-2.5 font-medium text-gray-800">{company.name}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{company.ceo_name || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600 truncate max-w-[150px]">{company.address || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{company.business_type || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{company.business_number || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{company.primary_contact?.name || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{company.primary_contact?.phone || '-'}</td>
+                </tr>
+              ))}
+            </DataTable>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {paginatedCompanies.map(company => (
+                <CompanyCard
+                  key={company.id}
+                  company={company}
+                  onClick={() => openCompanyDetail(company)}
+                  onToggleImportant={(e) => toggleCompanyImportant(company, e)}
+                />
+              ))}
+              {paginatedCompanies.length === 0 && (
+                <p className="col-span-full text-center text-gray-400 py-8 text-[13px]">등록된 기업이 없습니다</p>
+              )}
+            </div>
+          )}
         </div>
 
         {renderModals()}
@@ -993,6 +1473,7 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-lg font-bold text-gray-800">기관</h1>
           <div className="flex items-center gap-3">
+            <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
             <Pagination currentPage={currentPage} totalPages={totalOrganizationPages} onPageChange={setCurrentPage} />
             <button
               onClick={() => {
@@ -1016,30 +1497,46 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
           />
         </div>
 
-        <div className="flex-1">
-          <DataTable headers={organizationHeaders} emptyMessage="등록된 기관이 없습니다">
-            {paginatedOrganizations.map(org => (
-              <tr 
-                key={org.id} 
-                className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                onClick={() => openOrganizationDetail(org)}
-              >
-                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={(e) => toggleOrganizationImportant(org, e)}
-                    className={`text-base ${org.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                  >
-                    ⭐
-                  </button>
-                </td>
-                <td className="px-3 py-2.5 font-medium text-gray-800">{org.name}</td>
-                <td className="px-3 py-2.5 text-gray-600 truncate max-w-[150px]">{org.address || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{org.phone || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{org.primary_contact?.name || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{org.primary_contact?.phone || '-'}</td>
-              </tr>
-            ))}
-          </DataTable>
+        <div className="flex-1 overflow-auto">
+          {viewMode === 'list' ? (
+            <DataTable headers={organizationHeaders} emptyMessage="등록된 기관이 없습니다">
+              {paginatedOrganizations.map(org => (
+                <tr 
+                  key={org.id} 
+                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => openOrganizationDetail(org)}
+                >
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={(e) => toggleOrganizationImportant(org, e)}
+                      className={`text-base ${org.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                    >
+                      ⭐
+                    </button>
+                  </td>
+                  <td className="px-3 py-2.5 font-medium text-gray-800">{org.name}</td>
+                  <td className="px-3 py-2.5 text-gray-600 truncate max-w-[150px]">{org.address || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{org.phone || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{org.primary_contact?.name || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{org.primary_contact?.phone || '-'}</td>
+                </tr>
+              ))}
+            </DataTable>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {paginatedOrganizations.map(org => (
+                <OrganizationCard
+                  key={org.id}
+                  organization={org}
+                  onClick={() => openOrganizationDetail(org)}
+                  onToggleImportant={(e) => toggleOrganizationImportant(org, e)}
+                />
+              ))}
+              {paginatedOrganizations.length === 0 && (
+                <p className="col-span-full text-center text-gray-400 py-8 text-[13px]">등록된 기관이 없습니다</p>
+              )}
+            </div>
+          )}
         </div>
 
         {renderModals()}
@@ -1054,6 +1551,7 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-lg font-bold text-gray-800">개인</h1>
           <div className="flex items-center gap-3">
+            <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
             <Pagination currentPage={currentPage} totalPages={totalPersonalPages} onPageChange={setCurrentPage} />
             <button
               onClick={() => {
@@ -1077,30 +1575,46 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
           />
         </div>
 
-        <div className="flex-1">
-          <DataTable headers={personalHeaders} emptyMessage="등록된 개인 연락처가 없습니다">
-            {paginatedPersonals.map(personal => (
-              <tr 
-                key={personal.id} 
-                className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                onClick={() => openPersonalDetail(personal)}
-              >
-                <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={(e) => togglePersonalImportant(personal, e)}
-                    className={`text-base ${personal.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
-                  >
-                    ⭐
-                  </button>
-                </td>
-                <td className="px-3 py-2.5 font-medium text-gray-800">{personal.name}</td>
-                <td className="px-3 py-2.5 text-gray-600">{personal.position || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{personal.phone || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{personal.email || '-'}</td>
-                <td className="px-3 py-2.5 text-gray-600">{personal.company_name || '-'}</td>
-              </tr>
-            ))}
-          </DataTable>
+        <div className="flex-1 overflow-auto">
+          {viewMode === 'list' ? (
+            <DataTable headers={personalHeaders} emptyMessage="등록된 개인 연락처가 없습니다">
+              {paginatedPersonals.map(personal => (
+                <tr 
+                  key={personal.id} 
+                  className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                  onClick={() => openPersonalDetail(personal)}
+                >
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={(e) => togglePersonalImportant(personal, e)}
+                      className={`text-base ${personal.is_important ? 'text-yellow-400' : 'text-gray-300 hover:text-yellow-400'}`}
+                    >
+                      ⭐
+                    </button>
+                  </td>
+                  <td className="px-3 py-2.5 font-medium text-gray-800">{personal.name}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{personal.position || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{personal.phone || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{personal.email || '-'}</td>
+                  <td className="px-3 py-2.5 text-gray-600">{personal.company_name || '-'}</td>
+                </tr>
+              ))}
+            </DataTable>
+          ) : (
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+              {paginatedPersonals.map(personal => (
+                <PersonalCard
+                  key={personal.id}
+                  personal={personal}
+                  onClick={() => openPersonalDetail(personal)}
+                  onToggleImportant={(e) => togglePersonalImportant(personal, e)}
+                />
+              ))}
+              {paginatedPersonals.length === 0 && (
+                <p className="col-span-full text-center text-gray-400 py-8 text-[13px]">등록된 개인 연락처가 없습니다</p>
+              )}
+            </div>
+          )}
         </div>
 
         {renderModals()}
@@ -1305,8 +1819,126 @@ export default function PartnershipPage({ user, profile, subMenu }: PartnershipP
                   </div>
                 )}
               </div>
+
+              {/* 첨부파일 */}
+              <div className="mt-4">
+                <h4 className="text-[13px] font-medium text-gray-700 mb-2">첨부파일</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* 사업자등록증 */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[11px] text-gray-500 mb-2">사업자등록증</p>
+                    {selectedCompany.business_license_url ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openFilePreview(selectedCompany.business_license_url!, '사업자등록증')}
+                          className="flex-1 flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition text-left"
+                        >
+                          <span className="text-lg">📄</span>
+                          <span className="text-[12px] text-gray-700 truncate">사업자등록증 보기</span>
+                        </button>
+                        <button
+                          onClick={() => handleFileDelete('business_license')}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                          title="삭제"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          ref={businessLicenseInputRef}
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleFileUpload(file, 'business_license')
+                            e.target.value = ''
+                          }}
+                        />
+                        <button
+                          onClick={() => businessLicenseInputRef.current?.click()}
+                          disabled={uploadingFile === 'business_license'}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-500 transition disabled:opacity-50"
+                        >
+                          {uploadingFile === 'business_license' ? (
+                            <span className="text-[12px]">업로드 중...</span>
+                          ) : (
+                            <>
+                              <span>📤</span>
+                              <span className="text-[12px]">파일 업로드</span>
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  {/* 통장사본 */}
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-[11px] text-gray-500 mb-2">통장사본</p>
+                    {selectedCompany.bankbook_url ? (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openFilePreview(selectedCompany.bankbook_url!, '통장사본')}
+                          className="flex-1 flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition text-left"
+                        >
+                          <span className="text-lg">📄</span>
+                          <span className="text-[12px] text-gray-700 truncate">통장사본 보기</span>
+                        </button>
+                        <button
+                          onClick={() => handleFileDelete('bankbook')}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition"
+                          title="삭제"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          ref={bankbookInputRef}
+                          type="file"
+                          accept=".pdf,.jpg,.jpeg,.png"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleFileUpload(file, 'bankbook')
+                            e.target.value = ''
+                          }}
+                        />
+                        <button
+                          onClick={() => bankbookInputRef.current?.click()}
+                          disabled={uploadingFile === 'bankbook'}
+                          className="w-full flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-blue-400 hover:text-blue-500 transition disabled:opacity-50"
+                        >
+                          {uploadingFile === 'bankbook' ? (
+                            <span className="text-[12px]">업로드 중...</span>
+                          ) : (
+                            <>
+                              <span>📤</span>
+                              <span className="text-[12px]">파일 업로드</span>
+                            </>
+                          )}
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2">* PDF, JPG, PNG 파일만 업로드 가능합니다.</p>
+              </div>
             </div>
           </div>
+        )}
+
+        {/* 파일 미리보기 모달 */}
+        {showFilePreview && previewFileUrl && (
+          <FilePreviewModal
+            url={previewFileUrl}
+            fileName={previewFileName}
+            onClose={() => setShowFilePreview(false)}
+          />
         )}
 
         {/* 개인 등록/수정 모달 */}

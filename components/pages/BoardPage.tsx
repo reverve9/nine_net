@@ -159,7 +159,8 @@ export default function BoardPage({ user }: BoardPageProps) {
 
             <button
               onClick={handleCreatePost}
-              className="w-full py-3 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition"
+              className="w-full py-3 text-white rounded-lg font-medium hover:opacity-90 transition"
+              style={{ backgroundColor: '#5677b0' }}
             >
               게시하기
             </button>
@@ -218,7 +219,8 @@ export default function BoardPage({ user }: BoardPageProps) {
         <h1 className="text-2xl font-bold text-gray-800">📋 게시판</h1>
         <button
           onClick={() => setIsWriting(true)}
-          className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition flex items-center gap-2"
+          className="px-4 py-2 text-white rounded-lg hover:opacity-90 transition flex items-center gap-2"
+          style={{ backgroundColor: '#5677b0' }}
         >
           <span>+</span> 새 글 작성
         </button>
