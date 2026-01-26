@@ -1,6 +1,6 @@
 {
   "name": "nine-net",
-  "version": "0.1.0-beta",
+  "version": "0.3.2",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -10,9 +10,9 @@
     "lint": "next lint",
     "electron:dev": "electron .",
     "electron:build": "npm run build && electron-builder",
-    "electron:build:mac": "npm run build && electron-builder --mac",
-    "electron:build:win": "npm run build && electron-builder --win",
-    "electron:build:all": "npm run build && electron-builder --mac --win"
+    "electron:build:mac": "electron-builder --mac",
+    "electron:build:win": "electron-builder --win",
+    "electron:build:all": "electron-builder --mac --win"
   },
   "dependencies": {
     "next": "14.1.0",
@@ -78,8 +78,7 @@
     "publish": {
       "provider": "github",
       "owner": "reverve9",
-      "repo": "nine_net",
-      "releaseType": "draft"
+      "repo": "nine_net"
     }
   }
 }
