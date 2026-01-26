@@ -32,38 +32,36 @@ export default function Home() {
           return
         }
 
-        // 2. 세션 확인
-        const { data: { session }, error } = await supabase.auth.getSession()
+        // 2. localStorage에서 직접 토큰 확인
+        const storedSession = localStorage.getItem('sb-tjgmuxfmkrklqjzmwarl-auth-token')
         
-        // 토큰 갱신 실패 시 로그아웃 처리
-        if (error) {
-          console.error('Session error:', error)
-          await supabase.auth.signOut()
-          setUser(null)
-          setLoading(false)
-          return
-        }
-        
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('approval_status')
-            .eq('id', session.user.id)
-            .single()
-          
-          if (profile?.approval_status !== 'approved') {
-            await supabase.auth.signOut()
-            setApprovalStatus(profile?.approval_status || 'pending')
-            setUser(null)
-          } else {
-            setUser(session.user)
+        if (storedSession) {
+          try {
+            const sessionData = JSON.parse(storedSession)
+            if (sessionData?.user) {
+              // 프로필 승인 상태 확인
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('approval_status')
+                .eq('id', sessionData.user.id)
+                .single()
+              
+              if (profile?.approval_status !== 'approved') {
+                await supabase.auth.signOut()
+                localStorage.removeItem('sb-tjgmuxfmkrklqjzmwarl-auth-token')
+                setApprovalStatus(profile?.approval_status || 'pending')
+                setUser(null)
+              } else {
+                setUser(sessionData.user)
+              }
+            }
+          } catch (e) {
+            console.error('Session parse error:', e)
+            localStorage.removeItem('sb-tjgmuxfmkrklqjzmwarl-auth-token')
           }
         }
       } catch (error) {
         console.error('Initialize error:', error)
-        // 에러 발생 시 로그아웃 처리
-        await supabase.auth.signOut()
-        setUser(null)
       } finally {
         setLoading(false)
       }
@@ -75,13 +73,6 @@ export default function Home() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (isProcessing.current) return
-        
-        // 토큰 갱신 실패 시 로그아웃
-        if (_event === 'TOKEN_REFRESHED' && !session) {
-          setUser(null)
-          setLoading(false)
-          return
-        }
         
         if (_event === 'SIGNED_IN' && session?.user) {
           isProcessing.current = true
