@@ -11,15 +11,17 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null)
   const [needsSetup, setNeedsSetup] = useState(false)
-  const isProcessing = useRef(false)
+  const initialized = useRef(false)
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth event:', event)
         
-        // INITIAL_SESSION: 앱 시작 시 세션 복구 완료
-        if (event === 'INITIAL_SESSION') {
+        // 첫 번째 이벤트에서만 초기화 (INITIAL_SESSION 또는 SIGNED_IN)
+        if (!initialized.current && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || !session)) {
+          initialized.current = true
+          
           try {
             // 초기 설정 확인
             const { count } = await supabase
@@ -55,10 +57,8 @@ export default function Home() {
           return
         }
         
-        if (isProcessing.current) return
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          isProcessing.current = true
+        // 이후 로그인/로그아웃 이벤트
+        if (event === 'SIGNED_IN' && session?.user && initialized.current) {
           setLoading(true)
           
           try {
@@ -80,7 +80,6 @@ export default function Home() {
             console.error('Auth change error:', error)
           } finally {
             setLoading(false)
-            isProcessing.current = false
           }
         } else if (event === 'SIGNED_OUT') {
           setUser(null)
@@ -89,7 +88,18 @@ export default function Home() {
       }
     )
 
-    return () => subscription.unsubscribe()
+    // 세션 없을 때 타임아웃으로 로딩 해제
+    const timeout = setTimeout(() => {
+      if (loading && !initialized.current) {
+        initialized.current = true
+        setLoading(false)
+      }
+    }, 2000)
+
+    return () => {
+      clearTimeout(timeout)
+      subscription.unsubscribe()
+    }
   }, [])
 
   if (loading) {
