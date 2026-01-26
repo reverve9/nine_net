@@ -7,6 +7,7 @@ let mainWindow;
 let tray;
 
 const isDev = !app.isPackaged;
+console.log("isPackaged:", app.isPackaged, "isDev:", isDev);
 
 // 업데이트 상태
 let updateStatus = 'idle';
@@ -72,12 +73,10 @@ function createMainWindow() {
 
   // 실제 콘텐츠 로드
   setTimeout(() => {
-    if (isDev) {
-      mainWindow.loadURL('http://localhost:3000');
-    } else {
-      // 프로덕션: Vercel URL 사용
-      mainWindow.loadURL('https://nine-net.vercel.app');
-    }
+    // 항상 Vercel URL 사용 (개발 시에만 localhost)
+    const url = app.isPackaged ? 'https://nine-net.vercel.app' : 'http://localhost:3000';
+    console.log('Loading URL:', url, 'isPackaged:', app.isPackaged);
+    mainWindow.loadURL(url);
   }, 500);
 
   // 로드 실패 시 에러 페이지 표시
