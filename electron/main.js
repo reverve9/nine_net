@@ -6,10 +6,9 @@ let mainWindow;
 let tray;
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-const baseUrl = isDev ? 'http://localhost:3000' : 'https://nine-net.vercel.app';
 
 // 업데이트 상태
-let updateStatus = 'idle'; // idle, checking, available, downloading, ready, error
+let updateStatus = 'idle';
 
 // 로딩 HTML
 const loadingHTML = `
@@ -63,71 +62,63 @@ function createMainWindow() {
     frame: true,
     transparent: false,
     icon: path.join(__dirname, '../public/icon-512.png'),
-    show: false, // 처음에 숨김
+    show: false,
   });
 
   // 로딩 화면 먼저 표시
   mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(loadingHTML)}`);
   mainWindow.show();
 
-  // 실제 URL 로드
-  let loadAttempts = 0;
-  const maxAttempts = 3;
-
-  const loadMainUrl = () => {
-    loadAttempts++;
-    mainWindow.loadURL(baseUrl);
-  };
-
-  // 약간의 딜레이 후 메인 URL 로드
-  setTimeout(loadMainUrl, 500);
-
-  // 로드 실패 시 재시도
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.log(`로드 실패 (${loadAttempts}/${maxAttempts}):`, errorDescription);
-    
-    if (loadAttempts < maxAttempts) {
-      setTimeout(loadMainUrl, 2000); // 2초 후 재시도
+  // 실제 콘텐츠 로드
+  setTimeout(() => {
+    if (isDev) {
+      mainWindow.loadURL('http://localhost:3000');
     } else {
-      // 최대 시도 후 에러 페이지 표시
-      mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              height: 100vh;
-              background: #f5f5f5;
-              color: #333;
-            }
-            h1 { font-size: 24px; margin-bottom: 10px; }
-            p { color: #666; margin-bottom: 20px; }
-            button {
-              padding: 10px 20px;
-              background: #5677b0;
-              color: white;
-              border: none;
-              border-radius: 8px;
-              cursor: pointer;
-              font-size: 14px;
-            }
-            button:hover { opacity: 0.9; }
-          </style>
-        </head>
-        <body>
-          <h1>연결할 수 없습니다</h1>
-          <p>인터넷 연결을 확인해주세요.</p>
-          <button onclick="location.reload()">다시 시도</button>
-        </body>
-        </html>
-      `)}`);
+      // 프로덕션: 로컬 out 폴더의 index.html 로드
+      mainWindow.loadFile(path.join(__dirname, '../out/index.html'));
     }
+  }, 500);
+
+  // 로드 실패 시 에러 페이지 표시
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.log('로드 실패:', errorDescription);
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: #f5f5f5;
+            color: #333;
+          }
+          h1 { font-size: 24px; margin-bottom: 10px; }
+          p { color: #666; margin-bottom: 20px; }
+          button {
+            padding: 10px 20px;
+            background: #5677b0;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+          }
+          button:hover { opacity: 0.9; }
+        </style>
+      </head>
+      <body>
+        <h1>연결할 수 없습니다</h1>
+        <p>앱을 다시 시작해주세요.</p>
+        <button onclick="location.reload()">다시 시도</button>
+      </body>
+      </html>
+    `)}`);
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -143,7 +134,7 @@ function createMainWindow() {
   if (!isDev) {
     setTimeout(() => {
       autoUpdater.checkForUpdates();
-    }, 3000); // 3초 후 확인
+    }, 3000);
   }
 }
 
@@ -169,7 +160,6 @@ function createTray() {
   });
 }
 
-// 메신저앱 실행
 function openMessengerApp() {
   shell.openExternal('ninenet-messenger://');
 }
@@ -189,7 +179,6 @@ ipcMain.on('minimize-window', (event) => {
   if (win) win.minimize();
 });
 
-// 알림 표시
 ipcMain.on('show-notification', (event, { title, body }) => {
   if (Notification.isSupported()) {
     const notification = new Notification({
@@ -210,7 +199,6 @@ ipcMain.on('show-notification', (event, { title, body }) => {
   }
 });
 
-// 파일 선택 다이얼로그
 ipcMain.handle('select-file', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showOpenDialog(win, {
@@ -225,23 +213,17 @@ ipcMain.handle('select-file', async (event) => {
   return result.filePaths[0];
 });
 
-// 파일 경로 열기 (Finder/Explorer)
 ipcMain.on('open-path', (event, filePath) => {
   shell.showItemInFolder(filePath);
 });
 
-// ============================================
 // 업데이트 관련 IPC
-// ============================================
-
-// 수동 업데이트 확인
 ipcMain.on('check-for-update', () => {
   if (!isDev) {
     updateStatus = 'checking';
     sendUpdateStatus();
     autoUpdater.checkForUpdates();
   } else {
-    // 개발 모드에서는 알림만
     if (mainWindow) {
       mainWindow.webContents.send('update-status', { 
         status: 'dev-mode',
@@ -251,30 +233,25 @@ ipcMain.on('check-for-update', () => {
   }
 });
 
-// 업데이트 설치 (재시작)
 ipcMain.on('install-update', () => {
   autoUpdater.quitAndInstall();
 });
 
-// 현재 앱 버전 요청
 ipcMain.handle('get-app-version', () => {
   return app.getVersion();
 });
 
-// 업데이트 상태 전송
 function sendUpdateStatus(data = {}) {
   if (mainWindow) {
     mainWindow.webContents.send('update-status', { status: updateStatus, ...data });
   }
 }
 
-// 업데이트 확인 중
 autoUpdater.on('checking-for-update', () => {
   updateStatus = 'checking';
   sendUpdateStatus({ message: '업데이트 확인 중...' });
 });
 
-// 업데이트 있음
 autoUpdater.on('update-available', (info) => {
   updateStatus = 'available';
   sendUpdateStatus({ 
@@ -283,7 +260,6 @@ autoUpdater.on('update-available', (info) => {
   });
 });
 
-// 업데이트 없음 (최신 버전)
 autoUpdater.on('update-not-available', (info) => {
   updateStatus = 'idle';
   sendUpdateStatus({ 
@@ -292,7 +268,6 @@ autoUpdater.on('update-not-available', (info) => {
   });
 });
 
-// 다운로드 진행률
 autoUpdater.on('download-progress', (progress) => {
   updateStatus = 'downloading';
   sendUpdateStatus({ 
@@ -301,7 +276,6 @@ autoUpdater.on('download-progress', (progress) => {
   });
 });
 
-// 다운로드 완료
 autoUpdater.on('update-downloaded', (info) => {
   updateStatus = 'ready';
   sendUpdateStatus({ 
@@ -309,7 +283,6 @@ autoUpdater.on('update-downloaded', (info) => {
     version: info.version
   });
   
-  // 알림 표시
   if (Notification.isSupported()) {
     const notification = new Notification({
       title: '업데이트 준비 완료',
@@ -322,7 +295,6 @@ autoUpdater.on('update-downloaded', (info) => {
   }
 });
 
-// 업데이트 에러
 autoUpdater.on('error', (err) => {
   updateStatus = 'error';
   sendUpdateStatus({ 
