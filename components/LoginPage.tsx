@@ -63,6 +63,20 @@ export default function LoginPage({ initialMessage }: LoginPageProps) {
     setLoading(true)
     setError('')
 
+    // 비밀번호 유효성 검사
+    if (password.length < 8) {
+      setError('비밀번호는 8자 이상이어야 합니다.')
+      setLoading(false)
+      return
+    }
+    if (!/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) {
+      setError('비밀번호는 영문과 숫자를 포함해야 합니다.')
+      setLoading(false)
+      return
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
