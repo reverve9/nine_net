@@ -6,7 +6,7 @@ const fs = require('fs');
 let mainWindow;
 let tray;
 
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const isDev = !app.isPackaged;
 
 // 업데이트 상태
 let updateStatus = 'idle';
