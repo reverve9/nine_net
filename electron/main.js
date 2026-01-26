@@ -57,7 +57,7 @@ function createMainWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.js'),
-      partition: 'persist:ninenet',
+      
     },
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 12, y: 14 },
