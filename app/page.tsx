@@ -14,7 +14,6 @@ export default function Home() {
   const isProcessing = useRef(false)
 
   const checkSetup = async () => {
-    // 프로필 테이블에 유저가 있는지 확인
     const { count, error } = await supabase
       .from('profiles')
       .select('*', { count: 'exact', head: true })
@@ -34,7 +33,16 @@ export default function Home() {
         }
 
         // 2. 세션 확인
-        const { data: { session } } = await supabase.auth.getSession()
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        // 토큰 갱신 실패 시 로그아웃 처리
+        if (error) {
+          console.error('Session error:', error)
+          await supabase.auth.signOut()
+          setUser(null)
+          setLoading(false)
+          return
+        }
         
         if (session?.user) {
           const { data: profile } = await supabase
@@ -53,6 +61,9 @@ export default function Home() {
         }
       } catch (error) {
         console.error('Initialize error:', error)
+        // 에러 발생 시 로그아웃 처리
+        await supabase.auth.signOut()
+        setUser(null)
       } finally {
         setLoading(false)
       }
@@ -64,6 +75,13 @@ export default function Home() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         if (isProcessing.current) return
+        
+        // 토큰 갱신 실패 시 로그아웃
+        if (_event === 'TOKEN_REFRESHED' && !session) {
+          setUser(null)
+          setLoading(false)
+          return
+        }
         
         if (_event === 'SIGNED_IN' && session?.user) {
           isProcessing.current = true
@@ -111,7 +129,6 @@ export default function Home() {
     )
   }
 
-  // 초기 설정 필요
   if (needsSetup) {
     return <SetupPage onComplete={() => {
       setNeedsSetup(false)
