@@ -13,68 +13,51 @@ export default function Home() {
   const [needsSetup, setNeedsSetup] = useState(false)
   const isProcessing = useRef(false)
 
-  const checkSetup = async () => {
-    const { count, error } = await supabase
-      .from('profiles')
-      .select('*', { count: 'exact', head: true })
-    
-    return count === 0 || count === null
-  }
-
   useEffect(() => {
-    const initialize = async () => {
-      try {
-        // 1. 초기 설정 필요한지 확인
-        const setupNeeded = await checkSetup()
-        if (setupNeeded) {
-          setNeedsSetup(true)
-          setLoading(false)
-          return
-        }
-
-        // 2. localStorage에서 직접 토큰 확인
-        const storedSession = localStorage.getItem('sb-tjgmuxfmkrklqjzmwarl-auth-token')
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event)
         
-        if (storedSession) {
+        // INITIAL_SESSION: 앱 시작 시 세션 복구 완료
+        if (event === 'INITIAL_SESSION') {
           try {
-            const sessionData = JSON.parse(storedSession)
-            if (sessionData?.user) {
-              // 프로필 승인 상태 확인
+            // 초기 설정 확인
+            const { count } = await supabase
+              .from('profiles')
+              .select('*', { count: 'exact', head: true })
+            
+            if (count === 0 || count === null) {
+              setNeedsSetup(true)
+              setLoading(false)
+              return
+            }
+
+            if (session?.user) {
               const { data: profile } = await supabase
                 .from('profiles')
                 .select('approval_status')
-                .eq('id', sessionData.user.id)
+                .eq('id', session.user.id)
                 .single()
               
               if (profile?.approval_status !== 'approved') {
                 await supabase.auth.signOut()
-                localStorage.removeItem('sb-tjgmuxfmkrklqjzmwarl-auth-token')
                 setApprovalStatus(profile?.approval_status || 'pending')
                 setUser(null)
               } else {
-                setUser(sessionData.user)
+                setUser(session.user)
               }
             }
-          } catch (e) {
-            console.error('Session parse error:', e)
-            localStorage.removeItem('sb-tjgmuxfmkrklqjzmwarl-auth-token')
+          } catch (error) {
+            console.error('Initialize error:', error)
+          } finally {
+            setLoading(false)
           }
+          return
         }
-      } catch (error) {
-        console.error('Initialize error:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    initialize()
-
-    // 인증 상태 변화 감지
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+        
         if (isProcessing.current) return
         
-        if (_event === 'SIGNED_IN' && session?.user) {
+        if (event === 'SIGNED_IN' && session?.user) {
           isProcessing.current = true
           setLoading(true)
           
@@ -99,7 +82,7 @@ export default function Home() {
             setLoading(false)
             isProcessing.current = false
           }
-        } else if (_event === 'SIGNED_OUT') {
+        } else if (event === 'SIGNED_OUT') {
           setUser(null)
           setLoading(false)
         }
@@ -121,9 +104,7 @@ export default function Home() {
   }
 
   if (needsSetup) {
-    return <SetupPage onComplete={() => {
-      setNeedsSetup(false)
-    }} />
+    return <SetupPage onComplete={() => setNeedsSetup(false)} />
   }
 
   if (!user) {
