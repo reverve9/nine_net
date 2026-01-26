@@ -6,6 +6,9 @@ import LoginPage from '@/components/LoginPage'
 import Dashboard from '@/components/Dashboard'
 import SetupPage from '@/components/SetupPage'
 
+const SUPABASE_URL = 'https://tjgmuxfmkrklqjzmwarl.supabase.co'
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRqZ211eGZta3JrbHFqem13YXJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg2NzIwMTAsImV4cCI6MjA4NDI0ODAxMH0.5itBTNTO7I3vjVZn0OXoLnGt69L7YFEuunhfsqT3llY'
+
 export default function Home() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -16,29 +19,32 @@ export default function Home() {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth event:', event, 'initialized:', initialized)
+        console.log('Auth event:', event)
         
-        // 첫 이벤트에서 초기화
         if (!initialized && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
           setInitialized(true)
           
           try {
-            const { count } = await supabase
-              .from('profiles')
-              .select('*', { count: 'exact', head: true })
+            // 직접 fetch로 프로필 개수 확인
+            const countRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?select=id`, {
+              headers: { 'apikey': SUPABASE_KEY }
+            })
+            const profiles = await countRes.json()
             
-            if (count === 0 || count === null) {
+            if (!profiles || profiles.length === 0) {
               setNeedsSetup(true)
               setLoading(false)
               return
             }
 
             if (session?.user) {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('approval_status')
-                .eq('id', session.user.id)
-                .single()
+              // 직접 fetch로 승인 상태 확인
+              const profileRes = await fetch(
+                `${SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}&select=approval_status`,
+                { headers: { 'apikey': SUPABASE_KEY } }
+              )
+              const profileData = await profileRes.json()
+              const profile = profileData?.[0]
               
               if (profile?.approval_status !== 'approved') {
                 await supabase.auth.signOut()
@@ -56,15 +62,15 @@ export default function Home() {
           return
         }
 
-        // 이미 초기화된 후 로그인
         if (initialized && event === 'SIGNED_IN' && session?.user) {
           setLoading(true)
           try {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('approval_status')
-              .eq('id', session.user.id)
-              .single()
+            const profileRes = await fetch(
+              `${SUPABASE_URL}/rest/v1/profiles?id=eq.${session.user.id}&select=approval_status`,
+              { headers: { 'apikey': SUPABASE_KEY } }
+            )
+            const profileData = await profileRes.json()
+            const profile = profileData?.[0]
             
             if (profile?.approval_status !== 'approved') {
               await supabase.auth.signOut()
