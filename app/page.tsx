@@ -18,6 +18,9 @@ export default function Home() {
     const handleSession = async (session: any) => {
       if (!mounted) return
       
+      // Supabase 클라이언트 초기화 대기
+      await new Promise(resolve => setTimeout(resolve, 100))
+      
       try {
         // 초기 설정 확인
         const { count } = await supabase
