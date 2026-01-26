@@ -1,6 +1,7 @@
-const { app, BrowserWindow, shell, Tray, Menu, ipcMain, Notification, dialog } = require('electron');
+const { app, BrowserWindow, shell, Tray, Menu, ipcMain, Notification, dialog, protocol } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const path = require('path');
+const fs = require('fs');
 
 let mainWindow;
 let tray;
@@ -74,8 +75,8 @@ function createMainWindow() {
     if (isDev) {
       mainWindow.loadURL('http://localhost:3000');
     } else {
-      // 프로덕션: 로컬 out 폴더의 index.html 로드
-      mainWindow.loadFile(path.join(__dirname, '../out/index.html'));
+      // 프로덕션: Vercel URL 사용
+      mainWindow.loadURL('https://nine-net.vercel.app');
     }
   }, 500);
 
@@ -114,7 +115,7 @@ function createMainWindow() {
       </head>
       <body>
         <h1>연결할 수 없습니다</h1>
-        <p>앱을 다시 시작해주세요.</p>
+        <p>인터넷 연결을 확인해주세요.</p>
         <button onclick="location.reload()">다시 시도</button>
       </body>
       </html>
