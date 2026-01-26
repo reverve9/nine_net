@@ -11,58 +11,74 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [approvalStatus, setApprovalStatus] = useState<string | null>(null)
   const [needsSetup, setNeedsSetup] = useState(false)
+  const [initialized, setInitialized] = useState(false)
 
   useEffect(() => {
-    let mounted = true
-
-    const handleSession = async (session: any) => {
-      if (!mounted) return
-      
-      // Supabase 클라이언트 초기화 대기
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      try {
-        // 초기 설정 확인
-        const { count } = await supabase
-          .from('profiles')
-          .select('*', { count: 'exact', head: true })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth event:', event, 'initialized:', initialized)
         
-        if (count === 0 || count === null) {
-          setNeedsSetup(true)
-          setLoading(false)
+        // 첫 이벤트에서 초기화
+        if (!initialized && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
+          setInitialized(true)
+          
+          try {
+            const { count } = await supabase
+              .from('profiles')
+              .select('*', { count: 'exact', head: true })
+            
+            if (count === 0 || count === null) {
+              setNeedsSetup(true)
+              setLoading(false)
+              return
+            }
+
+            if (session?.user) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('approval_status')
+                .eq('id', session.user.id)
+                .single()
+              
+              if (profile?.approval_status !== 'approved') {
+                await supabase.auth.signOut()
+                setApprovalStatus(profile?.approval_status || 'pending')
+                setUser(null)
+              } else {
+                setUser(session.user)
+              }
+            }
+          } catch (error) {
+            console.error('Initialize error:', error)
+          } finally {
+            setLoading(false)
+          }
           return
         }
 
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('approval_status')
-            .eq('id', session.user.id)
-            .single()
-          
-          if (profile?.approval_status !== 'approved') {
-            await supabase.auth.signOut()
-            setApprovalStatus(profile?.approval_status || 'pending')
-            setUser(null)
-          } else {
-            setUser(session.user)
+        // 이미 초기화된 후 로그인
+        if (initialized && event === 'SIGNED_IN' && session?.user) {
+          setLoading(true)
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('approval_status')
+              .eq('id', session.user.id)
+              .single()
+            
+            if (profile?.approval_status !== 'approved') {
+              await supabase.auth.signOut()
+              setApprovalStatus(profile?.approval_status || 'pending')
+              setUser(null)
+            } else {
+              setApprovalStatus(null)
+              setUser(session.user)
+            }
+          } catch (error) {
+            console.error('Auth error:', error)
+          } finally {
+            setLoading(false)
           }
-        } else {
-          setUser(null)
-        }
-      } catch (error) {
-        console.error('Session error:', error)
-      } finally {
-        if (mounted) setLoading(false)
-      }
-    }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth event:', event)
-        
-        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
-          await handleSession(session)
         } else if (event === 'SIGNED_OUT') {
           setUser(null)
           setLoading(false)
@@ -70,11 +86,8 @@ export default function Home() {
       }
     )
 
-    return () => {
-      mounted = false
-      subscription.unsubscribe()
-    }
-  }, [])
+    return () => subscription.unsubscribe()
+  }, [initialized])
 
   if (loading) {
     return (
